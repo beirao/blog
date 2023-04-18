@@ -10,7 +10,7 @@ const siteMetadata = {
   siteLogo: 'static/images/logo.png',
   image: 'static/images/logo.png',
   socialBanner: 'static/images/logo.png',
-  email: 'beirao.dev@icloud.com',
+  // email: 'beirao.dev@icloud.com',
   github: 'https://github.com/beirao',
   twitter: 'https://twitter.com/0xBeirao',
   // facebook: 'https://facebook.com',
