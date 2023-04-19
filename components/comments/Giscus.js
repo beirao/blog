@@ -54,16 +54,13 @@ const Giscus = () => {
     }
   }, [commentsTheme])
 
-  // Reload on theme change
+  // Load comments on component mount
   useEffect(() => {
-    const iframe = document.querySelector('iframe.giscus-frame')
-    if (!iframe) return
     LoadComments()
-  }, [LoadComments])
+  }, [])
 
   return (
     <div className="pb-6 pt-6 text-center text-gray-700 dark:text-gray-300">
-      {enableLoadComments && <button onClick={LoadComments}>Load Comments</button>}
       <div className="giscus" id={COMMENTS_ID} />
     </div>
   )
