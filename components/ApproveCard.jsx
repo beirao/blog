@@ -10,17 +10,21 @@ import {
 } from 'wagmi'
 
 function ApproveCard(props) {
-  const {
-    data: allowanceValue,
-    isSuccess: isSuccessAllowanceRead,
-    isLoading: isLoadingAllowanceRead,
-  } = useContractRead({
-    address: props.addressToken,
-    abi: ERC20ABI,
-    functionName: 'allowance',
-    args: [props.addressOwner, props.addressSpender],
-  })
-  return <div>ApproveCard</div>
+  //   const {
+  //     data: allowanceValue,
+  //     isSuccess: isSuccessAllowanceRead,
+  //     isLoading: isLoadingAllowanceRead,
+  //   } = useContractRead({
+  //     address: props.addressToken,
+  //     abi: ERC20ABI,
+  //     functionName: 'allowance',
+  //     args: [props.addressOwner, props.addressSpender],
+  //   })
+  return (
+    <div className="border-b py-4">
+      ApproveCard {props.addressToken} {props.addressOwner} {props.addressSpender}
+    </div>
+  )
 }
 
 export default ApproveCard
