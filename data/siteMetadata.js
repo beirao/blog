@@ -1,7 +1,7 @@
 const siteMetadata = {
-  title: "Beirao's Blog",
-  author: 'Beirao',
-  headerTitle: "Beirao's Blog",
+  title: "Beirao's Hub",
+  author: 'beirao.eth',
+  headerTitle: "Beirao's Hub",
   description: 'A blog where I talk about WEB3 development and smart contract auditing.',
   language: 'en-us',
   theme: 'system', // system, dark or light

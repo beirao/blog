@@ -11,7 +11,7 @@ const LayoutWrapper = ({ children }) => {
   return (
     <SectionContainer>
       <div className="flex h-screen flex-col justify-between">
-        <header className="flex items-center justify-between py-10">
+        <header className="flex  flex-wrap items-center justify-between py-10">
           <div>
             <Link href="/" aria-label={siteMetadata.headerTitle}>
               <div className="flex items-center justify-between">
@@ -39,6 +39,14 @@ const LayoutWrapper = ({ children }) => {
                   {link.title}
                 </Link>
               ))}
+              <Link
+                href="/allowanceCleaner"
+                className="p-1 font-medium  hover:text-gray-900 dark:text-gray-100 sm:p-4"
+              >
+                <a className="rounded-lg bg-blue-700 p-2 px-3 text-sm text-white hover:bg-blue-600">
+                  Allowance Cleaner 🧹
+                </a>
+              </Link>
             </div>
             <ThemeSwitch />
             <MobileNav />
