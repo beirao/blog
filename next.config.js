@@ -53,6 +53,9 @@ const securityHeaders = [
 ]
 
 module.exports = withBundleAnalyzer({
+  compiler: {
+    removeConsole: true,
+  },
   reactStrictMode: true,
   pageExtensions: ['js', 'jsx', 'md', 'mdx'],
   eslint: {
@@ -85,3 +88,9 @@ module.exports = withBundleAnalyzer({
     return config
   },
 })
+
+// module.exports = {
+//   compiler: {
+//     removeConsole: true,
+//   },
+// }

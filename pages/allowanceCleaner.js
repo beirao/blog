@@ -2,41 +2,33 @@ import { PageSEO } from '@/components/SEO'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { ERC20ABI } from '../abi/ERC20.abi.json'
 import { useEffect, useState } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount, useContractRead } from 'wagmi'
 import ApproveCard from '@/components/ApproveCard'
-import is from 'sharp/lib/is'
 
-export default function AllowanceCleaner({ repo }) {
+export default function AllowanceCleaner() {
   const { isConnected, address } = useAccount()
 
   const [addressInput, setAddress] = useState('')
   const [txApprove, setSetTxApprove] = useState()
+  const [isLoading, setIsLoading] = useState(false)
 
   const getApproveTx = async () => {
     if (addressInput && addressInput.length === 42) {
-      // const response = await fetch('/api/getApproveTx', {
-      //   method: 'POST',
-      //   body: JSON.stringify({
-      //     addressOwner: addressInput,
-      //   }),
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      // })
-      setSetTxApprove([
-        {
-          addressToken: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-          addressSpender: '0xd9e1ce17f2641f24ae83637ab66a2cca9c378b9f',
+      setIsLoading(true) // Définir l'état de chargement sur true avant de fetcher les données
+      setSetTxApprove()
+
+      const response = await fetch('/api/getApproveTx', {
+        method: 'POST',
+        body: JSON.stringify({
+          addressOwner: addressInput,
+        }),
+        headers: {
+          'Content-Type': 'application/json',
         },
-        {
-          addressToken: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-          addressSpender: '0xc36442b4a4522e871399cd717abdd847ab11fe88',
-        },
-        {
-          addressToken: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-          addressSpender: '0x000000000022d473030f116ddee9f6b43ac78ba3',
-        },
-      ])
+      })
+      const responseData = await response.json() // Store the response data
+      setSetTxApprove(responseData)
+      setIsLoading(false)
     } else {
       alert('Please enter a valid address.')
     }
@@ -95,25 +87,55 @@ export default function AllowanceCleaner({ repo }) {
               )}
             </div>
             <button
-              className="m-3 h-10 rounded-lg bg-green-700 text-white hover:bg-green-600 md:m-0 "
+              className={`m-3 h-10 rounded-lg bg-green-700 text-white hover:bg-green-600 md:m-0 ${
+                isLoading ? 'cursor-not-allowed opacity-50' : ''
+              }`}
               onClick={getApproveTx}
+              disabled={isLoading}
             >
-              <a className="mx-2">Check allowance</a>
+              {isLoading ? (
+                <span className="flex items-center">
+                  <svg
+                    className="mx-4 h-5 animate-spin text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647zM16 0v4a8 8 0 00-8 8c0 2.18.877 4.152 2.296 5.591l3-2.647A5.965 5.965 0 0112 12a5.965 5.965 0 012.296-4.944l3 2.647C19.123 12.152 20 10.18 20 8a8 8 0 00-8-8z"
+                    ></path>
+                  </svg>
+                </span>
+              ) : (
+                <span className="mx-2">Check allowance</span>
+              )}
             </button>
           </div>
-          <div className="pt-1 text-slate-600 dark:text-slate-300">
-            {txApprove ? 'You have ' + txApprove.length + ' approved address(es) left:' : ''}
-          </div>
-          {txApprove
+
+          {Array.isArray(txApprove)
             ? txApprove.map((props, index) => (
                 <ApproveCard
                   key={index}
                   addressToken={props.addressToken}
                   addressOwner={addressInput}
+                  tx={props.tx}
                   addressSpender={props.addressSpender}
                 />
               ))
             : ''}
+          <div className="pt-1 text-slate-600 dark:text-slate-300">
+            {txApprove ? 'No more approved addresses left from here.' : ''}
+          </div>
         </div>
       </div>
     </>

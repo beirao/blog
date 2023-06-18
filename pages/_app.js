@@ -14,21 +14,47 @@ import LayoutWrapper from '@/components/LayoutWrapper'
 import { ClientReload } from '@/components/ClientReload'
 
 import '@rainbow-me/rainbowkit/styles.css'
-import { getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import { configureChains, createConfig, WagmiConfig } from 'wagmi'
-import { mainnet, polygon, optimism, arbitrum } from 'wagmi/chains'
+import { mainnet, polygon, optimism, arbitrum, zkSync, goerli } from 'wagmi/chains'
 import { alchemyProvider } from 'wagmi/providers/alchemy'
 import { publicProvider } from 'wagmi/providers/public'
+import {
+  argentWallet,
+  trustWallet,
+  ledgerWallet,
+  safeWallet,
+  xdefiWallet,
+  braveWallet,
+} from '@rainbow-me/rainbowkit/wallets'
+import { RainbowKitProvider, getDefaultWallets, connectorsForWallets } from '@rainbow-me/rainbowkit'
 
 const { chains, publicClient } = configureChains(
   [mainnet],
-  [alchemyProvider({ apiKey: process.env.ALCHEMY_API_KEY }), publicProvider()]
+  [alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY }), publicProvider()]
 )
-const { connectors } = getDefaultWallets({
-  appName: 'Allowance Cleaner',
-  projectId: 'AllowanceCleaner',
+
+const projectId = 'ALLOWANCE_CLEANER'
+
+const { wallets } = getDefaultWallets({
+  appName: 'RainbowKit demo',
+  projectId,
   chains,
 })
+
+const connectors = connectorsForWallets([
+  ...wallets,
+  {
+    groupName: 'Other',
+    wallets: [
+      argentWallet({ projectId, chains }),
+      trustWallet({ projectId, chains }),
+      ledgerWallet({ projectId, chains }),
+      safeWallet({ projectId, chains }),
+      xdefiWallet({ projectId, chains }),
+      braveWallet({ projectId, chains }),
+    ],
+  },
+])
 const wagmiConfig = createConfig({
   autoConnect: false,
   connectors,

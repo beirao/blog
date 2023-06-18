@@ -1,12 +1,8 @@
 # Beirao's Blog
 
-⚡️ Live at : [beirao.xyz](https://beirao.xyz) 
+⚡️ Live at : [beirao.xyz](https://beirao.xyz)
 
 🔥 Forked from [tailwind-nextjs-starter-blog](https://github.com/timlrx/tailwind-nextjs-starter-blog)
-
-## Support
-
-Using the template? Support this effort by giving a star on GitHub, sharing your own blog and giving a shoutout on Twitter or becoming a project [sponsor](https://github.com/sponsors/timlrx).
 
 ## Licence
 
