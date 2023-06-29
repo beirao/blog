@@ -3,7 +3,7 @@ const showcaseData = [
     title: 'Code4rena',
     description: `Showcase of my audit contest results.`,
     imgSrc: '/static/images/c4logo.jpeg',
-    href: '/blog/C4',
+    href: 'https://code4rena.com/@0xBeirao',
   },
   {
     title: 'Chainlink Spring 2023 Hackathon',

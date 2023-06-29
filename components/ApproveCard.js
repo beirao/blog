@@ -15,7 +15,6 @@ function ApproveCard(props) {
   const [allowanceAmount, setAllowanceAmount] = useState(0)
   const [tokenName, setTokenName] = useState()
   const [decToken, setDecToken] = useState(1)
-  const [isTransactionOpened, setIsTransactionOpened] = useState(false)
 
   const {
     data: tokenNameTemp,
@@ -67,13 +66,6 @@ function ApproveCard(props) {
     }
     setTokenName(tokenNameTemp)
     setDecToken(decimalsToken)
-    if (isSuccessApproveClean && !isTransactionOpened) {
-      window.open(`https://etherscan.io/address/${address}`, '_blank')
-      setIsTransactionOpened(true)
-    } else {
-      setIsTransactionOpened(false)
-    }
-    console.log('allowanceAmount ', allowanceAmount)
   }, [
     allowanceAmount,
     isConnected,
@@ -86,7 +78,6 @@ function ApproveCard(props) {
     decToken,
     decimalsToken,
     dataApproceClean,
-    isTransactionOpened,
   ])
   if (allowanceAmount == '0' || isNaN(allowanceAmount) || allowanceAmount == undefined) return null
 
