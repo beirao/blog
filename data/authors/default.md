@@ -1,7 +1,7 @@
 ---
 name: Beirao
 avatar: /static/images/pp2.png
-occupation: Smart contracts auditor ans developer
+occupation: Smart contracts auditor and developer
 # company:
 email: beirao.dev@icloud.com
 twitter: https://twitter.com/0xBeirao
