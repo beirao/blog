@@ -2,7 +2,7 @@ const siteMetadata = {
   title: "Beirao's Hub",
   author: 'beirao.eth',
   headerTitle: "Beirao's Hub",
-  description: 'A blog where I talk about WEB3 development and smart contract auditing.',
+  description: 'Check out my content on smart contracts security and development here.',
   language: 'en-us',
   theme: 'system', // system, dark or light
   siteUrl: 'https://beirao.xyz',

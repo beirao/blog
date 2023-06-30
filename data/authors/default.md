@@ -16,4 +16,4 @@ I started learning full-stack WEB3 development in mid-2022 with the [FCC Patrick
 
 I've achieved some great results. I made it to the top 150 on [Code4rena](https://code4rena.com/leaderboard) and even won some rewards on [Immunefi](https://immunefi.com).
 
-In addition to my primary role, I extend my skills as a contractor specializing in EVM smart contracts security and development. If you're in need of robust code review or high quality smart contract development for your startup, and you value fast service, I'm here to assist. Don't hesitate to get in touch via Twitter or Email.
+In addition to my primary role, I extend my skills as a contractor specializing in EVM smart contracts security and development. If you're in need of robust code review or high quality smart contracts development for your startup, I'm here to assist. Don't hesitate to get in touch via Twitter or Email.
