@@ -59,6 +59,18 @@ export default function AllowanceCleaner() {
         <div className="p-4">
           <div className="flex flex-col place-items-end pb-3 pt-1">
             <ConnectButton />
+            {isConnected ? (
+              <a
+                href={`https://etherscan.io/address/${address}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 text-blue-500 underline hover:underline-offset-4"
+              >
+                → etherscan
+              </a>
+            ) : (
+              ''
+            )}
           </div>
           <div className="mb-2 text-lg">Enter your address or connect wallet:</div>
           <div className="md:grid md:grid-cols-4 md:gap-4">

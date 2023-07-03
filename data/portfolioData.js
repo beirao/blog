@@ -1,4 +1,4 @@
-const showcaseData = [
+const portfolioData = [
   {
     title: 'Code4rena',
     description: `Showcase of my audit contest results.`,
@@ -13,4 +13,4 @@ const showcaseData = [
   },
 ]
 
-export default showcaseData
+export default portfolioData
