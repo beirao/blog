@@ -1,3 +1,4 @@
+import { Fragment, useRef, useEffect, useState } from 'react'
 import siteMetadata from '@/data/siteMetadata'
 import headerNavLinks from '@/data/headerNavLinks'
 import Logo from '@/data/logo.svg'
@@ -6,8 +7,11 @@ import SectionContainer from './SectionContainer'
 import Footer from './Footer'
 import MobileNav from './MobileNav'
 import ThemeSwitch from './ThemeSwitch'
+import ModalRequestAudit from '../components/ModalRequestAudit.js'
 
 const LayoutWrapper = ({ children }) => {
+  const [modalOpen, setModalOpen] = useState(false)
+
   return (
     <SectionContainer>
       <div className="flex h-screen flex-col justify-between">
@@ -39,14 +43,14 @@ const LayoutWrapper = ({ children }) => {
                   {link.title}
                 </Link>
               ))}
-              <Link
-                href="/allowanceCleaner"
-                className="p-1 font-medium  hover:text-gray-900 dark:text-gray-100 sm:p-4"
+
+              <button
+                onClick={() => setModalOpen(!modalOpen)}
+                className="ml-3 rounded-lg bg-gradient-to-r from-orange-600 to-orange-400  p-2 px-4 text-sm font-bold text-white opacity-80 hover:from-orange-400 hover:to-orange-600"
               >
-                <a className="rounded-lg bg-blue-700 p-2 px-3 text-sm text-white hover:bg-blue-600">
-                  Allowance Cleaner 🧹
-                </a>
-              </Link>
+                Request an audit 🕵️‍♂️
+              </button>
+              {modalOpen && <ModalRequestAudit />}
             </div>
             <ThemeSwitch />
             <MobileNav />

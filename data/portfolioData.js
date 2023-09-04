@@ -9,7 +9,7 @@ const portfolioData = [
     title: 'Solo Reviews',
     description: `All my private audit reports.`,
     imgSrc: '/static/images/solo-reviews.png',
-    href: '/tags/solo-reports',
+    href: '/tags/reports',
   },
   {
     title: 'Bug Bounty',

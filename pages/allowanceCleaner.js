@@ -8,7 +8,7 @@ import ApproveCard from '@/components/ApproveCard'
 export default function AllowanceCleaner() {
   const { isConnected, address } = useAccount()
 
-  const [addressInput, setAddress] = useState('')
+  const [addressInput, setAddress] = useState('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266')
   const [txApprove, setSetTxApprove] = useState()
   const [isLoading, setIsLoading] = useState(false)
 
@@ -93,6 +93,7 @@ export default function AllowanceCleaner() {
                   id="address"
                   maxLength={42}
                   minLength={42}
+                  defaultValue={'0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'}
                   onChange={(e) => setAddress(e.target.value)}
                   className="block w-full rounded-md border-0 px-3.5 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
                 />

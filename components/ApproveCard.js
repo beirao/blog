@@ -145,7 +145,7 @@ function ApproveCard(props) {
               </svg>
             </span>
           ) : (
-            <span className="">Clean</span>
+            <span className="">Revoke</span>
           )}
         </button>
       </div>
