@@ -1,19 +1,26 @@
 ---
 name: Beirao
 avatar: /static/images/pp2.png
-occupation: Smart contracts auditor and developer
-# company:
+occupation: Smart Contracts Security Researcher
+
+company: Independent
 email: beirao.dev@icloud.com
 twitter: https://twitter.com/0xBeirao
 github: https://github.com/beirao
 ---
 
-Hello friends :3
+Hey there, I'm Beirao!
 
-Welcome to my personal website. Here I share some of my thoughts and achievements about my WEB3 journey. I've just finished my engineering degree and now I'm working in a company as a smart contracts engineer.
+I'm just a guy diving headfirst into the smart contract security and WEB3.
 
-I started learning full-stack WEB3 development in mid-2022 with the [FCC Patrick course](https://www.youtube.com/watch?v=gyMwXuJrbJQ) and started my security journey in January with the famous cmichel blog post [How to become a smart contract auditor](https://cmichel.io/how-to-become-a-smart-contract-auditor/).
+I've got an engineering degree under my belt, and I'm currently working as an independent security researcher.
 
-I've achieved some great results. I made it to the top 150 on [Code4rena](https://code4rena.com/leaderboard) and even won some rewards on [Immunefi](https://immunefi.com).
+I started learning full development with Patrick Collins in mid-2022, and went deeper into security research early 2023.
 
-In addition to my primary role, I extend my skills as a contractor specializing in EVM smart contracts security and development. If you're in need of robust code review or high quality smart contracts development for your startup, I'm here to assist. Don't hesitate to get in touch via Twitter or Email.
+I'm constantly learning to make WEB3 a safer place! My mission is to audit and secure smart contracts, keeping them safe from hacks.
+
+I've already cracked the Top 150 on [Code4rena](https://code4rena.com/leaderboard) and won some rewards on [Immunefi](https://immunefi.com).
+
+As a result, companies have approached me to audit their smart contracts.
+
+If you're one of them and need a thorough code review or top-notch smart contract development, shoot me a [DM](https://twitter.com/0xBeirao)!
