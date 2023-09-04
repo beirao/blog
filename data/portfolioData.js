@@ -1,9 +1,21 @@
 const portfolioData = [
   {
     title: 'Code4rena',
-    description: `Showcase of my audit contest results.`,
+    description: `Showcase of my contest results.`,
     imgSrc: '/static/images/c4logo.jpeg',
     href: 'https://code4rena.com/@0xBeirao',
+  },
+  {
+    title: 'Solo Reviews',
+    description: `All my private audit reports.`,
+    imgSrc: '/static/images/solo-reviews.png',
+    href: '/tags/solo-reports',
+  },
+  {
+    title: 'Bug Bounty',
+    description: `My bug bounty submissions.`,
+    imgSrc: '/static/images/ImmuneFi-logo.webp',
+    href: '/tags/bug-bounty',
   },
   {
     title: 'Chainlink Spring 2023 Hackathon',
