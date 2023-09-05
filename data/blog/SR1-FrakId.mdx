@@ -1,0 +1,509 @@
+---
+title: '#1 Solo review report: Frak.id swap feature '
+date: '2023-09-05'
+tags: ['reports']
+draft: true
+summary: 'A mono pool gas efficient DEX on Polygon.'
+---
+
+# Introduction
+
+A time-boxed security review of the [Frak](https://frak.id/) protocol was done by [Beirao](https://www.beirao.xyz/about), with a focus on the security aspects of the application's smart contracts implementation.
+
+# Disclaimer
+
+A smart contract security review can never verify the complete absence of vulnerabilities. This is a time, resource and expertise bound effort where I try to find as many vulnerabilities as possible. I can not guarantee 100% security after the review or even if the review will find any problems with your smart contracts. Subsequent security reviews, bug bounty programs and on-chain monitoring are strongly recommended.
+
+# About Beirao
+
+I’m an independent smart contract security researcher. I extend my skills as a contractor specializing in EVM smart contracts security. If you're in need of robust code review, I'm here to help. We can get in touch via [Twitter](https://twitter.com/0xBeirao) or [Email](mailto:beirao.dev@icloud.com).
+
+# About Frak.id
+
+The Frak Protocol is a Consumption-based DeFi Protocol that aims to fairly distribute the value of content between creators and their community. Users can invest in derivatives called "Fraktions" tied to specific content, earning yield based on consumption. It operates on a Proof-of-Consumption (PoC) consensus mechanism. Fraktions' yield depends on individual and communal consumption, along with referrals. Rewards are divided among owners, a content pool, referees, and content creators. Transactions utilize the FRK utility token, exchangeable for other cryptocurrencies or fiat. Advertisers can use FRK for ads, benefiting the community. FRK holders access special deals and exclusive content.
+
+The review part concerns the swap feature of the [Frak.id](http://Frak.id) ecosystem. Users will have the ability to exchange FRK ←→ MATIC tokens within the Frak dashboard ([dashboard.frak.id](http://dashboard.frak.id/)). This is intended to prevent excessive exposure and volatility during the token launch. The goal is to minimize risk by avoiding a larger pool on platforms like Uniswap and ensuring a smoother token launch.
+
+## Privileged Roles & Actors
+
+**Fee receiver** : The protocol treasury. Can set a fee and earn on every swaps. \*\*\*\*
+
+**Swapper** : The user that want to exchange tokens.
+
+**Liquidity provider** : Provide liquidity and earn a fee based on the liquidity provided.
+
+## Observation
+
+This DEX is fork from [Philogy/singleton-swapper](https://github.com/Philogy/singleton-swapper). The main modifications are:
+
+1. Added native token support.
+2. Added the EIP-2612 permission feature.
+3. Changed from multi-pool to single-pool.
+4. Protocol fees added.
+5. Some gas efficiency optimizations were made.
+
+A lot of gas optimization techniques and an intensive use of assembly are made, but all these optimizations make the codebase less comprehensible. Since this project will be launch on Polygon which is a low-cost chain, all these optimizations may not be justified considering the security risks.
+
+# Severity classification
+
+| Severity           | Impact: High | Impact: Medium | Impact: Low |
+| ------------------ | ------------ | -------------- | ----------- |
+| Likelihood: High   | High         | High           | Medium      |
+| Likelihood: Medium | High         | Medium         | Low         |
+| Likelihood: Low    | Medium       | Low            | Low         |
+
+**Impact** - the technical, economic and reputation damage of a successful attack
+
+**Likelihood** - the chance that a particular vulnerability gets discovered and exploited
+
+**Severity** - the overall criticality of the risk
+
+# Security Assessment Summary
+
+**_review commit hash_ -** [a50af11b30f7b735c47e85eb72a02d0a9350d845](https://github.com/frak-id/swap-pool/commit/a50af11b30f7b735c47e85eb72a02d0a9350d845)
+
+**_fixes review commit hash_ -** [617e9bf17044fb728940b48d9fa6d2046548d129](https://github.com/frak-id/swap-pool/commit/617e9bf17044fb728940b48d9fa6d2046548d129)
+
+### Deployment chains
+
+- Polygon
+- Mumbai (testnet)
+
+### Scope
+
+The following smart contracts were in scope of the audit: (**803 SLoC**)
+
+- `src/MonoPool.sol` | 308 SLoC
+- `src/Ops.sol` | 17 SLoC
+- `src/encoder/DecoderLib.sol` | 45 SLoC
+- `src/encoder/EncoderLib.sol` | 153 SLoC
+- `src/libs/AccounterLib.sol` | 35 SLoC
+- `src/libs/PoolLib.sol` | 73 SLoC
+- `src/libs/SwapLib.sol` | 41 SLoC
+- `src/libs/TokenLib.sol` | 132 SLoC
+
+---
+
+# Findings Summary
+
+Summary :
+
+- 2 Highs
+- 1 Medium
+- 2 Lows
+- 4 Informationals
+- 3 Gas
+
+| ID     | Title                                                                          | Status |
+| ------ | ------------------------------------------------------------------------------ | ------ |
+| [H-01] | The swap pool can be DOS by force sending 1 wei of each tokens to the MonoPool | Fix    |
+| [H-02] | totalReserve can underflow causing a unrecoverable DOS                         | Fix    |
+| [M-01] | TokenLib does not check msg.value == amount                                    | Fix    |
+| [L-01] | One step transfer for feeReceiver can be dangerous                             | Ack    |
+| [L-02] | No deadlines for swap execution: can result in unexpected slippage             | Fix    |
+
+# Detailed Findings
+
+All POCs can be found here : _[gist](https://gist.github.com/beirao/258ccfa9b07367b1c614329bbf54e41a)_
+
+# [H-01] The swap pool can be DOS by force sending `1 wei` of each tokens to the `MonoPool`
+
+## Severity
+
+**Impact:** Medium - Swaps and additional liquidity are back, but the situation is recoverable.
+
+**Likelihood:** High - It’s easy to send 1 wei (+ Polygone tx are cheap).
+
+## Description
+
+By force sending `1 wei` of each asset to the `MonoPool`, the pool is miss processing the correct amount of asset that should be swap in both directions, resulting in a `1 wei` leftover making the transaction revert on: ([MonoPool.sol#L177-L179](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L177-L179))
+
+- Swap 0 to 1
+- Swap 1 to 0
+- Add Liquidity
+
+Fortunately, it’s possible to build and send this program to unlock the situation :
+
+```js
+bytes memory program = EncoderLib
+            .init()
+            .appendReceiveAll(true)
+            .appendReceiveAll(false)
+            .appendSendAll(false, userAddress)
+            .appendSendAll(true, userAddress)
+            .done();
+```
+
+But it brings some overhead and useless gas consumption.
+
+### POC
+
+Here are some tests that will revert, but should not revert once the recommendations are applied.
+
+```js
+//! This test does revert but shouldn't
+  function test_swap0to1_forceSend_H1()
+      public
+      withNativeLiquidity(100 ether, 100 ether)
+  {
+      send1WeiOfToken0andNative();
+
+      _logPoolState(pool);
+
+      _swap0to1Native(1 ether);
+
+      _logPoolState(pool);
+  }
+
+  //! This does revert but shouldn't
+  function test_swap1to0_forceSend_H1()
+      public
+      withNativeLiquidity(100 ether, 100 ether)
+  {
+      send1WeiOfToken0andNative();
+
+      _logPoolState(pool);
+
+      _swap1to0Native(1 ether);
+
+      _logPoolState(pool);
+  }
+
+  //! This does revert but shouldn't
+  function test_addLiquidity_forceSend_H1()
+      public
+      withNativeLiquidity(100 ether, 100 ether)
+  {
+      send1WeiOfToken0andNative();
+
+      _logPoolState(pool);
+
+      addNativeLiquidity(100 ether, 100 ether);
+
+      _logPoolState(pool);
+  }
+
+  //! This does revert but shouldn't
+  function test_removeHalfLiquidityThenTryToSwap0to1_forceSend_H1()
+      public
+      withNativeLiquidity(100 ether, 100 ether)
+  {
+      send1WeiOfToken0andNative();
+
+      _logPoolState(pool);
+
+      removeHalfNativeLiquidity();
+
+      _logPoolState(pool);
+
+      _swap0to1Native(1 ether);
+
+      _logPoolState(pool);
+  }
+
+  //! This does revert but shouldn't
+  function test_removeHalfLiquidityThenTryToSwap1to0_forceSend_H1()
+      public
+      withNativeLiquidity(100 ether, 100 ether)
+  {
+      send1WeiOfToken0andNative();
+
+      _logPoolState(pool);
+
+      removeHalfNativeLiquidity();
+
+      _logPoolState(pool);
+
+      _swap1to0Native(1 ether);
+
+      _logPoolState(pool);
+  }
+
+  //! This does revert but shouldn't
+  function test_removeAllLiquidityThenAddLiquidityThenTryToSwap0to1_forceSend_H1()
+      public
+      withNativeLiquidity(100 ether, 100 ether)
+  {
+      send1WeiOfToken0andNative();
+
+      _logPoolState(pool);
+
+      removeNativeLiquidity();
+
+      _logPoolState(pool);
+
+      addNativeLiquidity(100 ether, 100 ether);
+
+      _logPoolState(pool);
+
+      _swap0to1Native(1 ether);
+
+      _logPoolState(pool);
+  }
+
+  //! This does revert but shouldn't
+  function test_removeAllLiquidityThenAddLiquidityThenTryToSwap1to0_forceSend_H1()
+      public
+      withNativeLiquidity(100 ether, 100 ether)
+  {
+      send1WeiOfToken0andNative();
+
+      _logPoolState(pool);
+
+      removeNativeLiquidity();
+
+      _logPoolState(pool);
+
+      addNativeLiquidity(100 ether, 100 ether);
+
+      _logPoolState(pool);
+
+      _swap1to0Native(1 ether);
+
+      _logPoolState(pool);
+  }
+```
+
+## Recommendations
+
+If you don’t plan to support fee on transfer tokens :
+
+- No longer rely on `selfBalance()` ([MonoPool.sol#L414](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L414)) and track each balance state internally + M-01 recommendation. Once these changes are applied, any funds accidentally sent to the `MonoPool` will be permanently locked. You may want to add a method to safely remove these funds. (But it's not a priority and should be implemented very carefully)
+
+If gas is not a problem add this at the end of every swap or addLiquidity programs :
+
+```js
+.appendSendAll(false, userAddress)
+.appendSendAll(true, userAddress)
+```
+
+# [H-02] `totalReserve` can underflow causing a unrecoverable DOS
+
+[MonoPool.sol#L328](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L328)
+
+## Severity
+
+**Impact:** High - total DOS with liquidity and fees stuck in the contract forever
+
+**Likelihood:** Medium - hard conditions + no benefit from the attack
+
+## Description
+
+`tokenState.totalReserves` in the `MonoPool._send()` can underflow because the subtraction [L328](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L328) is unchecked.
+
+```js
+unchecked {
+    accounter.accountChange(isToken0, amount.toInt256());
+    tokenState.totalReserves -= amount;
+}
+```
+
+Normally this isn’t a problem because we always call the `MonoPool._receive()` or the `MonoPool._receiveAll()` methods to make the `MonoPool` receive our asset. By calling one of these two methods we will end up going this subtraction, which will naturally revert: [L415](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L415)
+
+```js
+uint256 totalReceived = directBalance - reserves;
+```
+
+So within the nominal use of the pool we are safe. But is there a way to validate the operation without calling the `MonoPool._receive()` or the `MonoPool._receiveAll()` method?
+
+Yes there is one! A hacker can : (context `1e18/1e18` lps are already on the pool)
+
+- Set up
+  - Add liquidity (let’s say `5e18/5e18`) - now `totalReserve = 6e18/6e18`
+  - Force send `1 wei` of `token0`
+- Operation
+  - Withdraw `6e18 + 1`. This will cause `totalReserve` to underflow ([MonoPool.sol#L328](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L328))
+  - Swap `token1` to `token0`. The goal here is to have the same value of both tokens so that we can withdraw our liquidity with no leftover.
+  - Then we remove the liquidity
+  - The transaction is valid and `totalReserve` has underflowed.
+
+Now the contract is under an unrecoverable DOS. `MonoPool._receive()` and `MonoPool._receiveAll()` will always revert at this point.
+
+## POC
+
+```js
+function test_H2() public withNativeLiquidity(1 ether, 1 ether) {
+    addNativeLiquidity(5 ether, 5 ether, swapUser);
+    _logPoolState(pool);
+
+    // send 1 wei of token0
+    token0.mint(swapUser, 1);
+    vm.prank(swapUser);
+    token0.transfer(address(pool), 1);
+
+    // Prank the eth to the user directly
+    token0.mint(swapUser, 6 ether + 1);
+    vm.prank(swapUser);
+    token0.approve(address(pool), 6 ether + 1);
+
+    // Build the send => swap => removeLiq op
+    bytes memory program = EncoderLib
+    .init()
+    .appendSend(true, swapUser, 6 ether + 1)
+    .appendSwap(false, 3 ether) // you need to choose this amount carefully to be able to remove liquidity
+    .appendRemoveLiquidity(3 ether)
+    .done();
+
+    // Send it
+    vm.prank(swapUser);
+    pool.execute(program);
+
+    _logPoolState(pool);
+}
+```
+
+## Recommendations
+
+Remove the `unchecked` in the `MonoPool._send()` method. [MonoPool.sol#L326](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L326)
+
+# [M-01] `TokenLib` does not check `msg.value == amount`
+
+## Severity
+
+**Impact:** Medium - the slippage may be misconfigured resulting in partial fund losses.
+
+**Likelihood:** Medium - we rely on the frontend to match `msg.value` and `amount`.
+
+## Description
+
+When calling receive, all integrity checks are done on `amount`, but the state change is done on `msg.value`. A miss configuration of these 2 parameters can lead to unexpected slippage.
+
+## Recommendations
+
+Add `if (msg.value != amount) revert();` when native transfer. By the way, this makes the `TokenLib` library way more robuste and usable in other context.
+
+```js
+function transferFromSender(Token self, address to, uint256 amount) internal {
+  // If we are in the case of a native token, nothing to do
+  if (self.isNative()) {
+      if (msg.value != amount) revert();
+      return;
+  }
+  // Try to perform the transfer
+  Token.unwrap(self).safeTransferFrom(msg.sender, to, amount);
+}
+```
+
+# Quality Assurance
+
+## [L-01] One step transfer for `_feeReceiver` can be dangerous
+
+[MonoPool.sol#L134-L147](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L134-L147)
+
+### Severity
+
+**Impact:** Medium - loss of admin feature forever
+
+**Likelihood:** Low - need an admin error
+
+### Description
+
+Single-step ownership transfer means that if an incorrect address is passed when transferring ownership or admin rights, it can mean that role is lost forever, with fees going to a different address.
+
+### Recommendations
+
+It is a best practice to use two-step ownership transfer pattern, meaning ownership transfer gets to a "pending" state and the new owner should claim his new rights, otherwise the old owner still has control of the contract.
+
+## [L-02] No deadlines for swap execution: can result in unexpected slippage
+
+[MonoPool.sol#L233-L283](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L233-L283)
+
+### Severity
+
+**Impact:** Medium - unexpected slippage
+
+**Likelihood:** Low - need the tx to wait in the mempool + need to forget slippage protection
+
+### Description
+
+Blueship DEXes such as Uniswap use deadlines to execute swaps. Transactions may wait in the mempool for some time and the price may move, resulting in unexpected slippage.
+
+Fortunately, users can specify slippage protection to protect against large price movements.
+
+### Recommendations
+
+Implement a deadline feature to ensure that transactions are executed within a time constraint.
+
+## [I-01] Use `SwapLib.BPS` instead of `MonoPool.PROTOCOL_FEES` for 10000
+
+[MonoPool.sol#L17](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L17)
+
+[SwapLib.sol#L6](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/libs/SwapLib.sol#L6)
+
+Both `SwapLib.BPS` and `MonoPool.PROTOCOL_FEES` are constants set to 10000. Remove all iterations of `MonoPool.PROTOCOL_FEES` and replace by `SwapLib.BPS`.
+
+## [I-02] `Ops.NATIVE_TOKEN` is defined but never used
+
+[Ops.sol#L49](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/Ops.sol#L49)
+
+Remove `Ops.NATIVE_TOKEN`.
+
+## [I-03] `unchecked` block is useless in `MonoPool` line 171
+
+[MonoPool.sol#L171-L175](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L171-L175)
+
+`unchecked` has an effect only on math operations directly within the block and don’t have any effect on functions called inside.
+
+## [I-04] Small centralization risk on protocol fees
+
+If the admin private key is compromised the hacker get set his address on `feeReceiver` and get 5% fee on every swaps.
+
+Use multi-sign.
+
+Since Frak plans to set the fee to 1%, set `MAX_PROTOCOL_FEE` as low as possible.
+
+# Gas report
+
+## [G-01] Use `!=` instead of `>` \***\*for uint 0 comparison\*\***
+
+[MonoPool.sol#L269](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L269)
+
+[MonoPool.sol#L273](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L273)
+
+[MonoPool.sol#L473](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L473)
+
+[MonoPool.sol#L477](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L477)
+
+## [G-02] `struct TokenState` can be reduce in storage size
+
+[MonoPool.sol#L37-L40](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L37-L40)
+
+Since the total MATIC supply is around 10**28 (< 2**128) we can be safe with `uint128` and win a storage slot on this structure.
+
+From :
+
+```js
+struct TokenState {
+    uint256 totalReserves;
+    uint256 protocolFees;
+}
+```
+
+To :
+
+```js
+struct TokenState {
+    uint128 totalReserves;
+    uint128 protocolFees;
+}
+```
+
+## [G-03] In `_accountReceived` , `tokenState.totalReserves` var is cached but used only once
+
+[MonoPool.sol#L413](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L413)
+
+No longer cache `tokenState.totalReserves` :
+
+```js
+function _accountReceived(
+    Accounter memory accounter,
+    TokenState storage tokenState,
+    Token token
+) internal {
+    uint256 directBalance = token.selfBalance();
+    uint256 totalReceived = directBalance - tokenState.totalReserves;
+
+    accounter.accountChange(token == TOKEN_0, -totalReceived.toInt256());
+    tokenState.totalReserves = directBalance;
+}
+```

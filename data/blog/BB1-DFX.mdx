@@ -1,0 +1,179 @@
+---
+title: '#1 Bug bounty report: How I made my first $10,000 on a not supported FoT token bug '
+date: '2023-09-05'
+tags: ['blog', 'bug-bounty']
+draft: true
+summary: '2 Mediums / 10k$ - DFX is a DEX specialized in "forex" assets. The reported bug is about fee on transfer tokens and USDC upgradability.'
+---
+
+Smart contract auditors know this fact: unsupported Fee on Transfer (FoT) tokens are some of the simplest and most frequent bugs. On Code4Arena, you gain $1 for reporting this bug.
+
+When I started learning SC security, I would never have thought I could earn $10,000 for this, after only 1 months of learning security.
+
+Let me tell you the story of a regular engineer who wanted to become a security researcher, dreamed of finding vulnerabilities, and earning money for it
+
+![shill pepe](/static/images/blog-img/DFX1.png)
+
+After more than 100 hours of work in only 1 month, I felt ready. Back in February 2023n I finished my first contest on Code4Arena, but there were no new contests right after that. So I decided to take a look at Immunefi.
+
+I immersed myself in the DFX codebase, a specialized DEX for stablecoin swaps.
+
+With bounties ranging from $1,000 to $100,000, the opportunity was captivating, so I decided to take a shot!
+
+![DFX payout](/static/images/blog-img/DFX2.png)
+
+With 4 audits conducted, including one with Trail of Bits, it was not a novice's playground. Especially for me with just 1 month experience.
+
+## The audit
+
+DFX had made two design decisions that stood out:
+
+- They utilized USDC as a bridge asset for all pairs. For example, exchanging EURT for GYEN meant transitioning throught EURT → USDC → GYEN.
+- Despite the Trail of Bits audit marking it as a "High" issue, the protocol assumed 1 USDC was equal to $1. A choice they chose not to follow.
+
+```solidity
+function getRate() public view override returns (uint256) {
+    return uint256(1e8); // Yea I can see it : 1USDC = 1$
+}
+```
+
+DFX, a "DeFi" protocol, tied to a bank - intriguing, right? 🤔
+
+So, I had this idea: USDC is crucial for DFX, but could there be problems with this token?" I went and checked out the famous [weird ERC20 repository](https://github.com/d-xo/weird-erc20). I tried to find any strange things that could happen with USDC.
+
+I thought about mixing the FoT with the upgradable and made a submission around it:
+
+## The submission
+
+> I will present 2 findings that DFX should be aware of, and they are somewhat related:
+>
+> - **Fee on transfer tokens can break the protocol by draining all liquidity of a `Curve`**
+> - **USDC is upgradable : making the use of this token as a “quote token” an uncertain choice for the future.**
+>
+> Let’s dive in.
+>
+> ### **Fee on transfer tokens can break the protocol by draining all liquidity of a `Curve`**
+>
+> ### Bug Description
+>
+> Fee on transfer tokens are not handled by DFX.
+>
+> ### Impact
+>
+> When a `FOT` (= Fee on transfer tokens) is swapped for `USDC`, the fee is paid by liquidity providers. Liquidity providers are gradually losing their investment on a `FOT/USDC` type of **Curve**.
+>
+> ### POC
+>
+> Here’s the gist : https://gist.github.com/beirao/3ad2628acb43f5c18dc9a2af3dc0b52f
+>
+> - I created a custom **_fee on transfer token_** (test/lib/MockFeeOnTransferERC20.sol)
+> - And added a new test file (test/FeeOnTransferAttack.t.sol)
+>
+> Configuration of the POC :
+>
+> - Fee on transfer : 10%
+> - Oracle ratio : 1:10 ⇒ 1 FOT = 10 USDC
+>
+> ```markdown
+> **--------------------- // t0 : Initial state**
+> Trader FOT balance : 1000
+> Trader USDC balance : 0
+> Curve FOT balance : 900000 // Here the pool is unbalanced due to fee on transfer
+> Curve USDC balance : 10000795
+> **--------------------- 1st swap FOT to USDC**
+> Trader FOT balance : 0
+> Trader USDC balance : 9996 // Here the user received ~10000 USDC  
+>  Curve FOT balance : 900900 // When the only 900 FOT was added to the pool
+> Curve USDC balance : 9990796
+> **--------------------- 2nd swap USDC to FOT**
+> Trader FOT balance : 899 // the contract here behaves correctly
+> Trader USDC balance : 0
+> Curve FOT balance : 899900
+> Curve USDC balance : 10000793
+> ```
+>
+> Two observations :
+>
+> - The initial deposit to the pool is unbalanced.
+> - When there is a swap from `FOT` to `USDC` , liquidity providers pay the fee.
+>
+> Both are unexpected behaviour that makes this `Curve` unusable.
+>
+> ### Recommendation
+>
+> Let’s see how uniswap solved this :
+>
+> 1. Firstly, they check if there is a difference between the **amount passed in parameter + reserve - fee** and the **current reserve** of `FOT` : `[UniswapV2Library.getAmountOut()](https://github.com/Uniswap/v2-periphery/blob/master/contracts/libraries/UniswapV2Library.sol#L42-L50)`
+> 2. If the amount in is greater than the amount received then the tx revert : [UniswapV2Router02.sol#L232](https://github.com/Uniswap/v2-periphery/blob/master/contracts/UniswapV2Router02.sol#L232)
+> 3. Probably because of gas reason the main swap function do not support `FOT` tokens. So there is a special function for that : `[swapExactTokensForTokensSupportingFeeOnTransferTokens](https://github.com/Uniswap/v2-periphery/blob/master/contracts/UniswapV2Router02.sol#L339-L355)()`
+> 4. In this function they use the return of `[UniswapV2Library.getAmountOut()](https://github.com/Uniswap/v2-periphery/blob/0335e8f7e1bd1e8d8329fd300aea2ef2f36dd19f/contracts/UniswapV2Router02.sol#L332)` for the swap instead of the amount passed by the user.
+>
+> Changes need to be made on :
+>
+> - Swaps with `[originSwap()](https://github.com/dfx-finance/protocol-v2/blob/main/src/Swaps.sol#L50-L86)`
+> - On providing liquidity `[deposit()](https://github.com/dfx-finance/protocol-v2/blob/b373a617b3dec6cacf417ccf40702d401f385c8d/src/Curve.sol#L650-L682)`
+>
+> ### Comments
+>
+> As a Forex type of DEX you may consider adding `PAXG` but at the current state this will be a serious mistake since `PAXG` has 0.02% fees on transfer. (see [here](https://github.com/paxosglobal/paxos-gold-contract/blob/034cb35de1ae708ad0e0a3e3a906fe86e43a5601/contracts/PAXGImplementation.sol#L308))
+>
+> ### **USDC is upgradable making the use of this token as a bridge an uncertain choice for the future.**
+>
+> ### Bug Description
+>
+> Certain tokens like `USDC` are upgradable, allowing token owners to make arbitrary modifications to the token's logic at any point in time.
+>
+> A change to the token's semantics can break DFX since it relies on the token's past behavior.
+>
+> ### Impact
+>
+> USDC serves as the bridge asset in DFX, demanding special attention. Being an upgradable token, a change could spell trouble for the entire DFX DEX.
+>
+> An endless array of possible changes exists, but one of them could involve implementing a fee on the transfer, breaking the protocol for all curves this time (as referenced above).
+>
+> ### Recommendation
+>
+> As a DAO, you definitely want to approve any changes to the USDC implementation.
+>
+> Consider introducing logic that will freeze interactions with the token in question if an upgrade is detected (e.g. the **`[TUSD` adapter](https://github.com/makerdao/dss-deploy/blob/7394f6555daf5747686a1b29b2f46c6b2c64b061/src/join.sol#L321)** used by MakerDAO).
+>
+> Implementing this adapter on `USDC` is, in my opinion, the minimum. Since stable coins are often upgradable (`USDT`too) and subject to regulation ; I recommend using this adapter on any upgradable asset.
+>
+> ### Comments
+>
+> Moreover, **`USDC`** is currently having some trouble with the SEC, so a change in the **`USDC`** implementation is definitely likely.
+
+## The negotiation
+
+I was so happy to find this vulnerability; it was my first one! As a novice, I believed I had discovered something important, so I reported it as critical! I was ambitious and already dreaming about the $100,000 prize!
+
+After 24 hours, they got back to me. It wasn't a critical one; they downplayed the impact and categorized it as a medium (5000$).
+
+I was fine with that. Yet, since I had submitted 2 vulnerabilities, I requested 2 medium payouts.
+
+Guess what? They accepted! I began security research just 1 months ago, and here I am with a five-digit payout! It's unbelievable.
+
+- I spent 12 hours on DFX.
+- I submitted my audit on Monday.
+- I received an answer on Tuesday.
+- I got paid on Wednesday.
+
+I never imagined I could achieve this so quickly. It's been a life-changing moment for me, confirming that I'm on the right path to becoming a security researcher.
+
+## Why it worked ?
+
+As I looked back at my submission, I realized it had all the right elements:
+
+- A functional proof of concept (POC).
+- Clear instances of why these concerns matter using examples like **`PAXG`** and **`USDC`**.
+- Straightforward recommendations ready for implementation.
+
+Think of these elements like the essential steps in a winning formula. Just as a recipe guides a cook, these components can guide your bug bounty submissions. Having a POC, showcasing real-world impact, and offering actionable solutions can make your findings stand out.
+
+## Conclusion
+
+It's not about finding the biggest issue. It's about presenting your discoveries in an irresistible way. So, next time you submit, remember my story and these three crucial ingredients. They could be the key to your own bug bounty success!
+
+A special compliment to DFX for taking security seriously. Not every protocol thinks this way.
+
+If you want to contribute to DFX's security go check their [program](https://immunefi.com/bounty/dfxfinance/) on Immunefi!

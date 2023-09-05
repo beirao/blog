@@ -53,7 +53,7 @@ export default function AllowanceCleaner() {
             Allowance Cleaner 🧹
           </h1>
           <p className="text-lg leading-7 text-gray-500 dark:text-gray-400">
-            Tool to help you clean up your ERC20 token allowance.
+            Tool to help you revoke your ERC20 token allowance.
           </p>
         </div>
         <div className="p-4">

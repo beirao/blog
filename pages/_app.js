@@ -28,6 +28,14 @@ import {
 } from '@rainbow-me/rainbowkit/wallets'
 import { RainbowKitProvider, getDefaultWallets, connectorsForWallets } from '@rainbow-me/rainbowkit'
 
+import '../css/nprogress.css'
+import Router from 'next/router'
+import NProgress from 'nprogress' //nprogress module
+
+Router.events.on('routeChangeStart', () => NProgress.start())
+Router.events.on('routeChangeComplete', () => NProgress.done())
+Router.events.on('routeChangeError', () => NProgress.done())
+
 const { chains, publicClient } = configureChains(
   [mainnet],
   [alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY }), publicProvider()]
