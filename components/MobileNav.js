@@ -18,7 +18,7 @@ const MobileNav = () => {
   }
 
   return (
-    <div className="sm:hidden">
+    <div className="md:hidden">
       <button
         type="button"
         className="ml-1 mr-1 h-8 w-8 rounded py-1"
@@ -76,15 +76,6 @@ const MobileNav = () => {
               </Link>
             </div>
           ))}
-          <div className="px-12 py-4">
-            <Link
-              href="/allowanceCleaner"
-              className="text-2xl font-bold tracking-widest text-gray-900 dark:text-gray-100"
-              onClick={onToggleNav}
-            >
-              Allowance Cleaner
-            </Link>
-          </div>
         </nav>
       </div>
     </div>

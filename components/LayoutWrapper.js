@@ -35,7 +35,7 @@ const LayoutWrapper = ({ children }) => {
               </Link>
 
               {typeof siteMetadata.headerTitle === 'string' ? (
-                <div className="hidden h-6 text-2xl font-semibold sm:block">
+                <div className="hidden h-6 text-2xl font-semibold md:block">
                   {siteMetadata.headerTitle}
                 </div>
               ) : (
@@ -46,19 +46,19 @@ const LayoutWrapper = ({ children }) => {
                 target="_blank"
                 rel="noreferrer"
                 href={requestXUrl}
-                className="ml-1 block rounded-lg bg-gradient-to-r from-orange-600 to-orange-400 p-2 px-2 text-xs font-bold text-white opacity-80 hover:from-orange-400 hover:to-orange-600 sm:hidden"
+                className="ml-1 block rounded-lg bg-gradient-to-r from-orange-600 to-orange-400 p-2 px-2 text-xs font-bold text-white opacity-80 hover:from-orange-400 hover:to-orange-600 md:hidden"
               >
                 Request an audit 🕵️‍♂️
               </a>
             </div>
           </div>
           <div className="flex items-center text-base leading-5">
-            <div className="hidden sm:block">
+            <div className="hidden md:block">
               {headerNavLinks.map((link) => (
                 <Link
                   key={link.title}
                   href={link.href}
-                  className="p-1 font-medium text-gray-900 dark:text-gray-100 sm:p-4"
+                  className="p-1 font-medium text-gray-900 dark:text-gray-100 md:p-4"
                 >
                   {link.title}
                 </Link>

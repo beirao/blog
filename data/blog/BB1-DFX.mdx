@@ -1,8 +1,8 @@
 ---
-title: '#1 Bug bounty report: How I made my first $10,000 on a not supported FoT token bug '
-date: '2023-09-05'
+title: '#1 Bug Bounty: How I made my first $10,000 on a not supported FoT token bug '
+date: '2023-09-14'
 tags: ['blog', 'bug-bounty']
-draft: true
+draft: false
 summary: '2 Mediums / 10k$ - DFX is a DEX specialized in "forex" assets. The reported bug is about fee on transfer tokens and USDC upgradability.'
 ---
 
@@ -10,26 +10,26 @@ Smart contract auditors know this fact: unsupported Fee on Transfer (FoT) tokens
 
 When I started learning SC security, I would never have thought I could earn $10,000 for this, after only 1 months of learning security.
 
-Let me tell you the story of a regular engineer who wanted to become a security researcher, dreamed of finding vulnerabilities, and earning money for it
+Let me tell you the story of a regular engineer who wanted to become a security researcher, dreamed of finding vulnerabilities, and earning money for it.
 
 ![shill pepe](/static/images/blog-img/DFX1.png)
 
-After more than 100 hours of work in only 1 month, I felt ready. Back in February 2023n I finished my first contest on Code4Arena, but there were no new contests right after that. So I decided to take a look at Immunefi.
+After more than 100 hours of work in only 1 month, I felt ready. Back in February 2023, I finished my first contest on Code4Arena, but there were no new contests right after that. So I decided to take a look at Immunefi.
 
 I immersed myself in the DFX codebase, a specialized DEX for stablecoin swaps.
 
-With bounties ranging from $1,000 to $100,000, the opportunity was captivating, so I decided to take a shot!
+With bounties ranging from 1,000 to 100,000, the opportunity was captivating, so I decided to take a shot!
 
 ![DFX payout](/static/images/blog-img/DFX2.png)
 
 With 4 audits conducted, including one with Trail of Bits, it was not a novice's playground. Especially for me with just 1 month experience.
 
-## The audit
+## The context
 
 DFX had made two design decisions that stood out:
 
 - They utilized USDC as a bridge asset for all pairs. For example, exchanging EURT for GYEN meant transitioning throught EURT → USDC → GYEN.
-- Despite the Trail of Bits audit marking it as a "High" issue, the protocol assumed 1 USDC was equal to $1. A choice they chose not to follow.
+- Despite the Trail of Bits audit marking it as a "High" issue, the protocol assumed 1 USDC was equal to $1.
 
 ```solidity
 function getRate() public view override returns (uint256) {
@@ -39,7 +39,7 @@ function getRate() public view override returns (uint256) {
 
 DFX, a "DeFi" protocol, tied to a bank - intriguing, right? 🤔
 
-So, I had this idea: USDC is crucial for DFX, but could there be problems with this token?" I went and checked out the famous [weird ERC20 repository](https://github.com/d-xo/weird-erc20). I tried to find any strange things that could happen with USDC.
+So, I had this idea: USDC is crucial for DFX, but could there be problems with this token? I went and checked out the famous [weird ERC20 repository](https://github.com/d-xo/weird-erc20). I tried to find any strange things that could happen with USDC.
 
 I thought about mixing the FoT with the upgradable and made a submission around it:
 
@@ -103,19 +103,19 @@ I thought about mixing the FoT with the upgradable and made a submission around 
 >
 > Let’s see how uniswap solved this :
 >
-> 1. Firstly, they check if there is a difference between the **amount passed in parameter + reserve - fee** and the **current reserve** of `FOT` : `[UniswapV2Library.getAmountOut()](https://github.com/Uniswap/v2-periphery/blob/master/contracts/libraries/UniswapV2Library.sol#L42-L50)`
-> 2. If the amount in is greater than the amount received then the tx revert : [UniswapV2Router02.sol#L232](https://github.com/Uniswap/v2-periphery/blob/master/contracts/UniswapV2Router02.sol#L232)
-> 3. Probably because of gas reason the main swap function do not support `FOT` tokens. So there is a special function for that : `[swapExactTokensForTokensSupportingFeeOnTransferTokens](https://github.com/Uniswap/v2-periphery/blob/master/contracts/UniswapV2Router02.sol#L339-L355)()`
-> 4. In this function they use the return of `[UniswapV2Library.getAmountOut()](https://github.com/Uniswap/v2-periphery/blob/0335e8f7e1bd1e8d8329fd300aea2ef2f36dd19f/contracts/UniswapV2Router02.sol#L332)` for the swap instead of the amount passed by the user.
+> 1. Firstly, they check if there is a difference between the **amount passed in parameter + reserve - fee** and the **current reserve** of `FOT` : `UniswapV2Library.getAmountOut()`
+> 2. If the amount in is greater than the amount received then the tx revert : **UniswapV2Router02.sol#L232**
+> 3. Probably because of gas reason the main swap function do not support `FOT` tokens. So there is a special function for that : `swapExactTokensForTokensSupportingFeeOnTransferTokens()`
+> 4. In this function they use the return of `UniswapV2Library.getAmountOut()` for the swap instead of the amount passed by the user.
 >
 > Changes need to be made on :
 >
-> - Swaps with `[originSwap()](https://github.com/dfx-finance/protocol-v2/blob/main/src/Swaps.sol#L50-L86)`
-> - On providing liquidity `[deposit()](https://github.com/dfx-finance/protocol-v2/blob/b373a617b3dec6cacf417ccf40702d401f385c8d/src/Curve.sol#L650-L682)`
+> - Swaps with `originSwap()`
+> - On providing liquidity `deposit()`
 >
 > ### Comments
 >
-> As a Forex type of DEX you may consider adding `PAXG` but at the current state this will be a serious mistake since `PAXG` has 0.02% fees on transfer. (see [here](https://github.com/paxosglobal/paxos-gold-contract/blob/034cb35de1ae708ad0e0a3e3a906fe86e43a5601/contracts/PAXGImplementation.sol#L308))
+> As a Forex type of DEX you may consider adding `PAXG` but at the current state this will be a serious mistake since `PAXG` has 0.02% fees on transfer.
 >
 > ### **USDC is upgradable making the use of this token as a bridge an uncertain choice for the future.**
 >
@@ -135,7 +135,7 @@ I thought about mixing the FoT with the upgradable and made a submission around 
 >
 > As a DAO, you definitely want to approve any changes to the USDC implementation.
 >
-> Consider introducing logic that will freeze interactions with the token in question if an upgrade is detected (e.g. the **`[TUSD` adapter](https://github.com/makerdao/dss-deploy/blob/7394f6555daf5747686a1b29b2f46c6b2c64b061/src/join.sol#L321)** used by MakerDAO).
+> Consider introducing logic that will freeze interactions with the token in question if an upgrade is detected.
 >
 > Implementing this adapter on `USDC` is, in my opinion, the minimum. Since stable coins are often upgradable (`USDT`too) and subject to regulation ; I recommend using this adapter on any upgradable asset.
 >
