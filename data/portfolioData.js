@@ -5,12 +5,12 @@ const portfolioData = [
     imgSrc: '/static/images/c4logo.jpeg',
     href: 'https://code4rena.com/@0xBeirao',
   },
-  // {
-  //   title: 'Solo Reviews Reports',
-  //   description: `All my private audit reports.`,
-  //   imgSrc: '/static/images/solo_reviews.png',
-  //   href: '/tags/reports',
-  // },
+  {
+    title: 'Solo Reviews Reports',
+    description: `All my private audit reports.`,
+    imgSrc: '/static/images/solo_reviews.png',
+    href: '/tags/reports',
+  },
   {
     title: 'Bug Bounty',
     description: `My bug bounty submissions.`,

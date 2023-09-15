@@ -103,7 +103,7 @@ I thought about mixing the FoT with the upgradable and made a submission around 
 >
 > 1. Firstly, they check if there is a difference between the **amount passed in parameter + reserve - fee** and the **current reserve** of `FOT` : `UniswapV2Library.getAmountOut()`
 > 2. If the amount in is greater than the amount received then the tx revert : **UniswapV2Router02.sol#L232**
-> 3. Probably because of gas reason the main swap function do not support `FOT` tokens. So there is a special function for that : `swapExactTokensForTokensSupportingFeeOnTransferTokens()`
+> 3. Probably because of gas reason the main swap function do not support `FOT` tokens. So there is a special function for that.
 > 4. In this function they use the return of `UniswapV2Library.getAmountOut()` for the swap instead of the amount passed by the user.
 >
 > Changes need to be made on :

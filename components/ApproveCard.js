@@ -104,17 +104,17 @@ function ApproveCard(props) {
           Spender: {props.addressSpender.slice(0, 5)}...
         </a>
       </div>
-      <div className="mt-3.5">
+      <div className=" mt-3.5">
         <a
           className="underline-offset-1 hover:underline"
           href={`https://etherscan.io/tx/${props.tx}`}
           target="_blank"
           rel="noreferrer"
         >
-          tx: {props.tx.slice(0, 5)}...
+          {props.tx.slice(0, 5)}...
         </a>
       </div>
-      <div className="rounded-lg border px-4 pt-2.5 font-bold hover:rounded-full active:bg-slate-200 dark:text-white dark:active:bg-slate-700">
+      <div className="rounded-lg border px-3 pt-2.5 font-bold hover:rounded-full active:bg-slate-200 dark:text-white dark:active:bg-slate-700">
         <button
           className=""
           onClick={() => {

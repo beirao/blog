@@ -1,8 +1,8 @@
 ---
 title: '#1 Solo Review: Frak.id swap feature'
-date: '2023-09-21'
+date: '2023-09-15'
 tags: ['reports']
-draft: true
+draft: false
 summary: 'A gas effective single pool DEX on Polygon.'
 ---
 
@@ -26,7 +26,7 @@ The review part concerns the swap feature of the [Frak.id](http://Frak.id) ecosy
 
 ## Privileged Roles & Actors
 
-**Fee receiver** : The protocol treasury. Can set a fee and earn on every swaps. \*\*\*\*
+**Fee receiver** : The protocol treasury. Can set a fee and earn on every swaps.
 
 **Swapper** : The user that want to exchange tokens.
 
@@ -266,16 +266,16 @@ Here are some tests that will revert, but should not revert once the recommendat
 
 ## Recommendations
 
-If you don’t plan to support fee on transfer tokens :
-
-- No longer rely on `selfBalance()` ([MonoPool.sol#L414](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L414)) and track each balance state internally + M-01 recommendation. Once these changes are applied, any funds accidentally sent to the `MonoPool` will be permanently locked. You may want to add a method to safely remove these funds. (But it's not a priority and should be implemented very carefully)
-
-If gas is not a problem add this at the end of every swap or addLiquidity programs :
+No longer rely on `selfBalance()` ([MonoPool.sol#L414](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L414)) and track each balance state internally + M-01 recommendation. Once these changes are applied, any funds accidentally sent to the `MonoPool` will be locked until someone build a operation like this one:
 
 ```js
+.init()
 .appendSendAll(false, userAddress)
 .appendSendAll(true, userAddress)
+.done()
 ```
+
+We can't add `appendSendAll()` to all operations, because this removes the slippage protection.
 
 # [H-02] `totalReserve` can underflow causing a unrecoverable DOS
 
@@ -454,7 +454,7 @@ Since Frak plans to set the fee to 1%, set `MAX_PROTOCOL_FEE` as low as possible
 
 # Gas report
 
-## [G-01] Use `!=` instead of `>` \***\*for uint 0 comparison\*\***
+## [G-01] Use `!=` instead of `>` for uint 0 comparison
 
 [MonoPool.sol#L269](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L269)
 
