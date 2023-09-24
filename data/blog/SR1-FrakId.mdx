@@ -298,7 +298,7 @@ unchecked {
 }
 ```
 
-Normally this isn’t a problem because we always call the `MonoPool._receive()` or the `MonoPool._receiveAll()` methods to make the `MonoPool` receive our asset. By calling one of these two methods we will end up going this subtraction, which will naturally revert: [L415](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L415)
+Normally this isn’t a problem because we always call the `MonoPool._receive()` or the `MonoPool._receiveAll()` methods to make the `MonoPool` receive our asset. By calling one of these two methods we will end up doing this subtraction, which will naturally revert: [L415](https://github.com/frak-id/swap-pool/blob/a50af11b30f7b735c47e85eb72a02d0a9350d845/src/MonoPool.sol#L415)
 
 ```js
 uint256 totalReceived = directBalance - reserves;
