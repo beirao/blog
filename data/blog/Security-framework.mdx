@@ -1,0 +1,242 @@
+---
+title: 'The Framework to help you securing your protocol'
+date: '2023-10-06'
+tags: ['blog', 'framework']
+draft: false
+summary: 'The ultimate framework to best secure your Dapp and optimize the money spent on security reviews.'
+---
+
+![framework1](/static/images/blog-img/Framework1.jpg)
+
+I've met many CTOs, CEOs, and devs from protocols. As a security researcher, I mostly discuss security with them. All of them want to bring something different. But they all have the same priority: security.
+
+They often ask me, 'How can we get a good security review? How can we be sure the review was thorough and didn't miss anything?
+
+Without specific knowledge about the industry, it's hard to know and teams get lost with the high number of security firms.
+
+I've discussed this topic a lot. I decided to create a framework to help them navigate clearly in the security review ocean.
+
+This framework will help you to find the optimal way to secure **your** protocol.
+
+Today, I'm sharing this framework graciously with you. Feel free to use it as you want.
+
+---
+
+_Here, I'm talking about the costs of conducting security reviews for 1,000 sloc._
+
+_If your budget is between 50k and 500k, it's the right place for you!_
+
+_I strongly recommend allocating at least $50k/1,000 sloc._
+
+_If you have a smaller budget, I'll try to give you other solutions._
+
+This framework is my perspective. If you want to add/change something, I would love to discuss with you. Feel free to DM me.
+
+# The framework
+
+I've outlined the framework in this diagram. I'll show you why it's important to follow the steps in this order to optimize the value for money invested in security review.
+
+![framework1](/static/images/blog-img/Framework2.jpg)
+
+---
+
+## All types of security review:
+
+**Gas optimization:**
+
+They are a way to optimize your protocol gas usage.
+
+It’s not mandatory to do a gas optimization review especially on low transaction fee chains.
+
+**Pros** : Make your protocol more affordable for your community.
+
+**Cons** : Some gas optimization techniques can open security risks.
+
+**Solo security researchers:**
+
+They are like the traditional firms.
+
+But faster and cheaper.
+
+Solo security researchers work as contractors for firms and conduct solo reviews on the side.
+
+They are usually ranked on contest platforms. It gives them proof of expertise for protocols that want to work with them.
+
+**Pros** : Cheap and quick.
+
+**Cons** : Limited to one set of eyes
+
+**Traditional firms:**
+
+The first option that existed. They are here since Web2.
+
+Traditional firms emerged in the Web3 ecosystem from the beginning. They are here to advise you on improving your code.
+
+If you're looking for a consulting type of review, they are the right choice!
+
+**Pros** : Affordable, Consulting
+
+**Cons** : You don’t really know who he’s reviewing, Limited numbers of eyes
+
+**Marketing firms:**
+
+This is a subgroup of traditional firms. The term "marketing" is not pejorative. It's because they are well-known.
+
+If you choose them, a part of the review cost goes toward creating open-source tools and libraries. So they are more expensive.
+
+Conducting a review with them improves the credibility of your protocol.
+
+**Pros**: Consulting, Boosts credibility, Offers improved service compared to trad firms, Supports open-source tools
+
+**Cons**: More costly, Limited numbers of eyes
+
+**Contests**:
+
+Auditing competitions are open to everyone.
+
+No consulting here, just bug reports.
+
+The bigger the reward, the more attention whitehats will pay to your protocol.
+
+**Pros**: Many reviewers, Good value for the price, Flexible pricing.
+
+**Cons**: Submissions need sorting, Raw reports without consulting.
+
+**Decentralized OG:**
+
+A group of security researchers who work on demand for protocols. They draw in the top talent in the security field.
+
+When you want the best, it comes at a higher price. A big chunk of the review cost goes to them, and they earn more than regular firms
+
+**Pros**: Top talent at your service.
+
+**Cons**: High cost.
+
+**Formal verification companies:**
+
+They offer a unique approach to security. Instead of just looking for bugs, they start by creating specifications. Then, they test the program by trying different inputs to check if it follows the rules they set.
+
+**Pros**: Innovative approach for uncovering unique bugs.
+
+**Cons**: Limited to business logic and mathematical issues.
+
+_Here is a table that categorizes every actor._
+
+| Gas review                          | Solo security researchers                                                                      | Trad firms                                                                                        | Marketing firms                                  | Contests                                       | Decentralized OG                                | Formal verification                              |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------- | ----------------------------------------------- | ------------------------------------------------ |
+| [Gaslite](https://www.gaslite.org/) | [pashovkrum](https://twitter.com/pashovkrum)                                                   | [Sigma Prime](https://sigmaprime.io/)                                                             | [OpenZeppelin](https://twitter.com/OpenZeppelin) | [Code4rena](https://twitter.com/code4rena)     | [Spearbit](https://twitter.com/SpearbitDAO)     | [Certora](https://twitter.com/CertoraInc)        |
+| Private gas review                  | [bytes032](https://twitter.com/bytes032)                                                       | [Cyfrin](https://twitter.com/CyfrinAudits)                                                        | [Consensys](https://twitter.com/ConsensysAudits) | [Sherlock](https://twitter.com/sherlockdefi)   | [Trust Security](https://twitter.com/trust__90) | [Trail Of Bits](https://twitter.com/trailofbits) |
+| -                                   | [gogo](https://twitter.com/gogotheauditor)                                                     | [MixBytes](https://twitter.com/MixBytes)                                                          | [Trail Of Bits](https://twitter.com/trailofbits) | [HatsFinance](https://twitter.com/HatsFinance) | [Paladin](https://twitter.com/0xPaladinSec)     | -                                                |
+|                                     | [chrisdior](https://twitter.com/chrisdior777) + [ddimitrovv](https://twitter.com/ddimitrovv22) | [Dedaub](https://twitter.com/dedaub)                                                              | -                                                | [CodeHawks](https://twitter.com/CodeHawks)     | -                                               |                                                  |
+|                                     | [me:)](https://twitter.com/0xBeirao)                                                           | [Guardian Audits](https://guardianaudits.com/)                                                    |                                                  | -                                              |                                                 |                                                  |
+|                                     | -                                                                                              | -                                                                                                 |                                                  |                                                |                                                 |                                                  |
+|                                     | [Choose your fighter on the C4 leaderboard](https://code4rena.com/leaderboard)                 | [All Trad firms sorted by speciality](https://www.alchemy.com/best/blockchain-auditing-companies) |                                                  |                                                |                                                 |                                                  |
+
+## WHAT'S ABOUT THE FRAMEWORK ?
+
+On the diagram, I identified 6 layers of security:
+
+1. Internal reviews
+2. Gas review
+3. Consulting
+4. Formal verification
+5. Decentralized OGs
+6. Contest
+7. Bug bounty
+
+As you may know, I'm French, and I love cheese!
+
+So let's compare these 6 layers to 6 different slices of cheese: _The more layers you have, the more the attack surface will be reduced._
+
+![framework3](/static/images/blog-img/Framework3.png)
+
+The 1st layer is your team's protocol. You have to conduct an intensive internal review and involve as many people as possible.
+
+The good thing about this part is that it doesn't have a "real cost." That's why you must do it.
+
+[AlexTheEntreprenerd](https://twitter.com/GalloDaSballo) said in [Proof Of Popcast](https://open.spotify.com/episode/6tEfiDL2M1p5uz5jGnNkWQ?si=df6bd1df0ca94c69): “You want to have developers that are as good as possible at security research as you can.”
+
+---
+
+The next layer is about gas optimization.
+
+As I said, it's not mandatory to do one. However, it can be interesting to do one if you are deploying on the Ethereum mainnet and if you can afford it.
+
+Depending on whether it's a significant refactoring, it may be good to redo the internal review layer.
+
+Note that a gas review is probably going to make your codebase less comprehensible. So other security layers may cost more.
+
+---
+
+Next, we move on to the consulting layers.
+
+Contrary to what you might think, this layer isn't primarily focused on finding all vulnerabilities.
+
+Its main purpose is to conduct an initial code assessment, identifying flawed architectural choices that may require modifications.
+
+Depending on your budget and marketing priorities, you have three options:
+
+- Traditional security firms
+- Marketing firms
+- Solo reviews
+
+---
+
+If you can afford it, formal verification review can be done. Thanks to it’s a different approach you may find some uniques/hard to find business logique bugs.
+
+The hard part in this layer is to write specifications. Once written, the prover can run at no cost, so every time you change the code you can run it.
+
+Note that this layer is not the priority. I recommend doing it if you can also afford a contest, a decentralized OG review and a bug bounty program.
+
+---
+
+The next layer is the **Decentralized OG**.
+
+Your code is now being reviewed by top-notch security researchers. If you can afford a contest and a bug bounty program, this is a layer to do.
+
+---
+
+As I pointed out in the diagram, the most crucial step is the **contest**. This layer has the fewest gaps due to its high number of participants. If you can only choose one layer, prioritize the contest.
+
+The goal of this layer is to discover as many vulnerabilities as possible before production.
+
+If you have privacy concerns, then the layer to prioritize is the Decentralized OG.
+
+---
+
+The number of layer doesn’t matter, in any case you should run a bug bounty program.
+
+Adjust it to fit your budget, but try to align it with your project's Total Value Locked (TVL). The industry standard is to allocate 10% of the total assets that could be at risk, with a maximum cap.
+
+Congratulations 🎉! You've done everything right, and you're ready to deploy your contracts!
+
+Now you can:
+
+- Verify bytecode on-chain
+- Monitor the blockchain
+- Establish procedures in case of unforeseen events
+- Pre-write messages to send to potential attackers
+- Hope for the best
+
+For more details, check out Heidi Wilder's insightful talk during [DSS 2023](https://www.youtube.com/watch?v=TDlkkg8N0wc).
+
+---
+
+## If you budget is limited ( < 40k$/1000sloc)
+
+I think the best way to proceed is to entirely rely on solo security researchers.
+
+When you hire security researchers, they have more to gain than big firms. Their success will be their portfolio.
+
+They will focus 100% on YOUR smart contracts. Nothing else. I am pretty sure you can be surprised by the quality of service these researchers provide.
+
+You can hire multiple solo searchers to simulate a proper contest or firm review and probably get a similar result at a lower cost.
+
+How can you benefit from this?
+To find a security researcher:
+
+- Go on platforms like Code4Arena
+- Check the leaderboard
+- Get reviews from different security researchers.
+
+For example, with $15,000, your protocol can be reviewed by 5 talented security researchers at $3,000 each. They all have different approaches, increasing the possibility of identifying vulnerabilities.
