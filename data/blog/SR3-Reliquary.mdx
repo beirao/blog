@@ -1,0 +1,240 @@
+---
+title: '#3 Solo Review + fuzzing: Reliquary'
+date: '2023-11-13'
+tags: ['reports']
+draft: false
+summary: 'An innovative incentive distribution system inspired by MasterChef.'
+---
+
+# Introduction
+
+A time-boxed security review of the Digit/Reliquary protocol was done by [Beirao](https://www.beirao.xyz/about), with a focus on the security aspects of the application's smart contracts implementation.
+
+# Disclaimer
+
+A smart contract security review can never verify the complete absence of vulnerabilities. This is a time, resource and expertise bound effort where I try to find as many vulnerabilities as possible. I can not guarantee 100% security after the review or even if the review will find any problems with your smart contracts. Subsequent security reviews, bug bounty programs and on-chain monitoring are strongly recommended.
+
+# About Beirao
+
+I’m an independent smart contract security researcher. I extend my skills as a contractor specializing in EVM smart contracts security. If you're in need of robust code review, I'm here to help. We can get in touch via [Twitter](https://twitter.com/0xBeirao) or [Email](mailto:beirao.dev@icloud.com).
+
+# About Digit (Reliquary)
+
+Digit is an improvement of the famous MasterChef contract. The goal is to distribute a reward token proportional to the amount of a user's deposit. The protocol owner can credit the contract with the reward token and set the desired issuance per second.
+
+Compared to Masterchef, the `Reliquary` contract offers more flexibility and customization:
+
+> _From the README_
+>
+> 1. Emits tokens based on the maturity of a user's investment, separated in tranches.
+> 2. Binds variable emission rates to a base emission curve designed by the developer for predictable emissions.
+> 3. Supports deposits and withdrawals along with these variable rates, which has historically been impossible.
+> 4. Issues a 'financial NFT' to users which represents their underlying positions, able to be traded and leveraged without removing the underlying liquidity.
+> 5. Can emit multiple types of rewards for each investment, as well as handle complex reward mechanisms based on deposit and withdrawal.
+
+## Observations
+
+### Approach taken in evaluating the codebase
+
+I conducted a manual review of all contracts within the defined scope, with a particular focus on the `Reliquary` contract. In addition to the manual review, I executed a comprehensive fuzzing campaign using Echidna, leading to the discovery of [L-01]. I believe that these fuzzing tests enhance the confidence in the `Reliquary` contract, as they help ensure the adherence to essential invariants.
+
+### Codebase quality analysis
+
+The overall code quality is highly mature; however, there is a notable absence of documentation. Although the test suite is extensive, it lacks sufficient fuzzing and invariant testing. Fortunately, I addressed this issue during my engagement:https://github.com/Byte-Masons/Reliquary/pull/30
+
+### Centralization risks
+
+The inherent nature of the system introduces a degree of centralization. Certik had previously highlighted this centralization risk, and I have no additional comments to contribute on this matter.
+
+### Design recommendation
+
+I think some power users who have many relics may want to update all their relics in a single transaction. It's possible to do this using the multicall feature, but I believe it would be helpful to have a specific function that automatically updates all relics for a user.
+
+### Mechanism review
+
+The system has undergone four prior audits, confirming its mature architecture capable of handling non-trivial mechanisms with elegance. However, one drawback is that users must regularly invoke `updatePosition()` to optimize the yield for the next maturity. Not updating regularly will result in suboptimal yield optimization.
+
+![Pools params](/static/images/blog-img/SR3-1.png)
+
+![Positions params](/static/images/blog-img/SR3-2.png)
+
+## Privileged Roles & Actors
+
+**Reliquary**
+
+- Admin roles (All set to the same multisig):
+  - `DEFAULT_ADMIN_ROLE`: can add new pools
+  - `OPERATOR`: can modify pools
+  - `EMISSION_CURVE` : can modify the emission curve
+- User:
+  - open/close/manage position
+
+# Severity classification
+
+| Severity           | Impact: High | Impact: Medium | Impact: Low |
+| ------------------ | ------------ | -------------- | ----------- |
+| Likelihood: High   | High         | High           | Medium      |
+| Likelihood: Medium | High         | Medium         | Low         |
+| Likelihood: Low    | Medium       | Low            | Low         |
+
+**Impact** - the technical, economic and reputation damage of a successful attack
+
+**Likelihood** - the chance that a particular vulnerability gets discovered and exploited
+
+**Severity** - the overall criticality of the risk
+
+# Security Assessment Summary
+
+**_review commit hash_ -** [fd1d8f44](https://github.com/Byte-Masons/Reliquary/commit/6b18d7bd19f810e6a3cb1a4550f30412fd1d8f44)
+
+**_fixes review commit hash_ - fffffffff**
+
+### Deployment chains
+
+- Optimism
+
+### Scope
+
+The following smart contracts were in scope of the audit: (total : 1130 SLoC)
+
+- `contracts/Reliquary.sol`
+- `contracts/rewarders/ChildRewarder.sol`
+- `contracts/rewarders/DepositBonusRewarder.sol`
+- `contracts/rewarders/MultiplierRewarder.sol`
+- `contracts/rewarders/MultiplierRewarderOwnable.sol`
+- `contracts/rewarders/ParentRewarder.sol`
+- `contracts/rewarders/SingleAssetRewarder.sol`
+- `contracts/emission_curves/Constant.sol`
+- `contracts/emission_curves/OwnableCurve.sol`
+- `contracts/helpers/DepositHelperERC4626.sol`
+- `contracts/helpers/DepositHelperReaperBPT.sol`
+- `contracts/helpers/DepositHelperReaperVault.sol`
+
+# Findings Summary
+
+Summary :
+
+- 0 High
+- 1 Medium
+- 2 Lows
+
+| ID     | Title                                                                       | Status |
+| ------ | --------------------------------------------------------------------------- | ------ |
+| [M-01] | reaperVault is compliant with fee on transfer tokens, but the helper is not | -      |
+| [L-01] | emergencyWithdraw may not burn rewards and redistribute them unfairly       | -      |
+| [L-02] | Pools are not updated before setting a new curve                            | -      |
+
+# Invariants implemented with Echidna
+
+**PR with Echidna tests:** https://github.com/Byte-Masons/Reliquary/pull/30
+
+- ✅ A user should never be able to withdraw more than deposited.
+- ✅ No `position.entry` should be greater than `block.timestamp`.
+- ✅ The sum of all `position.amount` should never be greater than total deposit.
+- ✅ The sum of balances in levels should never be greater than total deposit.
+- ✅ All arrays defining pools should be equal in size.
+- ✅ The sum of all `allocPoint` must be equal to `totalAllocpoint`.
+- ✅ The total reward harvested and pending should never be greater than the total emission rate.
+- ❌ (L-01) `emergencyWithdraw` should burn position rewards.
+- ✅ A position amount should never be greater than the `level.balance` deposited at the position level.
+
+# Detailed Findings
+
+# [M-01] `reaperVault` is compliant with fee on transfer tokens, but the helper is not
+
+[DepositHelperReaperVault.sol#L94](https://github.com/Byte-Masons/Reliquary/blob/6b18d7bd19f810e6a3cb1a4550f30412fd1d8f44/contracts/helpers/DepositHelperReaperVault.sol#L94)
+
+[ReaperVault.sol#L1089-L1092](https://github.com/Byte-Masons/reaper-core/blob/4b2af85b83f17984cf43b7d7ef51e0b25a57b339/contracts/ReaperVault.sol#L1089-L1092)
+
+## Description
+
+The Reaper contract is compatible with fee-on-transfer (FoT) tokens, as indicated in [ReaperVault.sol#L1089-L1092](https://github.com/Byte-Masons/reaper-core/blob/4b2af85b83f17984cf43b7d7ef51e0b25a57b339/contracts/ReaperVault.sol#L1089-L1092). However, it's important to note that the `DepositHelperReaperVault` does not share this compatibility, as highlighted in [DepositHelperReaperVault.sol#L94](https://github.com/Byte-Masons/Reliquary/blob/6b18d7bd19f810e6a3cb1a4550f30412fd1d8f44/contracts/helpers/DepositHelperReaperVault.sol#L94).
+
+When using FoT tokens, the helper will revert during the vault deposit process because the helper's balance will be insufficient for the deposit operation ([DepositHelperReaperVault.sol#L102](https://github.com/Byte-Masons/Reliquary/blob/6b18d7bd19f810e6a3cb1a4550f30412fd1d8f44/contracts/helpers/DepositHelperReaperVault.sol#L102)).
+
+## Recommendations
+
+Add FoT compatibility on the helper contract:
+
+```solidity
+function _prepareDeposit(uint pid, uint amount) internal returns (uint shares) {
+        IReaperVault vault = IReaperVault(reliquary.poolToken(pid));
+        IERC20 token = vault.token();
+
+        if (msg.value != 0) {
+            require(amount == msg.value, "ether amount mismatch");
+            require(address(token) == address(weth), "not an ether vault");
+            weth.deposit{value: msg.value}();
+        } else {
+						uint balanceBefore = token.balanceOf(address(this));
+            token.safeTransferFrom(msg.sender, address(this), amount);
+						amount = token.balanceOf(address(this)) - balanceBefore;
+        }
+[...]
+```
+
+# [L-01] `emergencyWithdraw` may not burn rewards and redistribute them unfairly
+
+[Reliquary.sol#L312-L328](https://github.com/Byte-Masons/Reliquary/blob/6b18d7bd19f810e6a3cb1a4550f30412fd1d8f44/contracts/Reliquary.sol#L312-L328)
+
+## Description
+
+If the underlying pool of a position emergency withdrawn is not updated, pending rewards from this position will be redistributed and not burned.
+
+This is not critical but there is an inconsistency in the treatment of reward burns.
+
+_Call sequence that break the invariant:_
+
+![Untitled](/static/images/blog-img/SR3-3.png)
+
+## Recommendations
+
+Before subtracting the amount, add `_updatePool(poolId);` to update the pool and account rewards.
+
+```solidity
+function emergencyWithdraw(uint relicId) external override nonReentrant {
+    address to = ownerOf(relicId);
+    if (to != msg.sender) revert NotOwner();
+
+    PositionInfo storage position = positionForId[relicId];
+    uint amount = position.amount;
+    uint poolId = position.poolId;
+
+    // @audit L-01 correction
+    _updatePool(poolId); //!
+
+    levels[poolId].balance[position.level] -= amount;
+
+    _burn(relicId);
+    delete positionForId[relicId];
+
+    IERC20(poolToken[poolId]).safeTransfer(to, amount);
+
+    emit ReliquaryEvents.EmergencyWithdraw(poolId, amount, to, relicId);
+}
+```
+
+# [L-02] Pools are not updated before setting a new curve
+
+[Reliquary.sol#L111-L114](https://github.com/Byte-Masons/Reliquary/blob/6b18d7bd19f810e6a3cb1a4550f30412fd1d8f44/contracts/Reliquary.sol#L111-L114)
+
+## Description
+
+Pools are not updated before a new curve is set, so users may be over or under rewarded depending on the new curve rate and the last pool update.
+
+## Recommendations
+
+Update all pools before setting a new emission curve.
+
+```solidity
+function setEmissionCurve(address _emissionCurve) external override onlyRole(EMISSION_CURVE) {
+    for (uint i; i < poolLength(); ) {
+        _updatePool(i);
+        unchecked {
+            ++i;
+        }
+    }
+    emissionCurve = _emissionCurve;
+    emit ReliquaryEvents.LogSetEmissionCurve(_emissionCurve);
+}
+```

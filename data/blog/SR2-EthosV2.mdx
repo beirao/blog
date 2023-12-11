@@ -1,0 +1,367 @@
+---
+title: '#2 Solo Review: Ethos V2'
+date: '2023-10-11'
+tags: ['reports']
+draft: false
+summary: 'A multi-collateral stablecoin on Optimism.'
+---
+
+# Introduction
+
+A time-boxed security review of the [Ethos Reserve](https://www.ethos.finance/) protocol was done by [Beirao](https://www.beirao.xyz/about), with a focus on the security aspects of the application's smart contracts implementation.
+
+# Disclaimer
+
+A smart contract security review can never verify the complete absence of vulnerabilities. This is a time, resource and expertise bound effort where I try to find as many vulnerabilities as possible. I can not guarantee 100% security after the review or even if the review will find any problems with your smart contracts. Subsequent security reviews, bug bounty programs and on-chain monitoring are strongly recommended.
+
+# About Beirao
+
+I’m an independent smart contract security researcher. I extend my skills as a contractor specializing in EVM smart contracts security. If you're in need of robust code review, I'm here to help. We can get in touch via [Twitter](https://twitter.com/0xBeirao) or [Email](mailto:beirao.dev@icloud.com).
+
+# About Ethos Reserve
+
+Ethos Reserve is a decentralized lending protocol that allows users to take out interest-free loans against collateral such as BTC and ETH. Loans on Ethos Reserve are paid in Ethos Reserve Notes, or ERN, which is a stable asset pegged to the US Dollar.
+
+Loans drawn from Ethos Reserve require users to maintain a minimum amount of collateral in the system to cover their debt. These collateral ratios are as low as 108% for ETH, 120% for BTC, and may be lowered over time depending on usage.
+
+Collateral backing ERN is used to generate passive yield, which is directed toward Stability Pool depositors. These depositors secure the protocol against unhealthy collateral by depositing their ERN tokens into a pool which liquidates unhealthy positions within the system.
+
+Essentially, Ethos is a Liquity fork that adds multicollateral support and generates a yield through an automatic DeFi strategy investment.
+
+## Privileged Roles & Actors
+
+**Staker** - Stakers earn a share of the fees equal to the share of the total OATH staked. The fee come from a pro rata share of the borrowing and redemption fees in ERN and all supported collaterals.
+
+**Borrower** - Borrowers lock up a supported collateral, borrow against the collateral to withdraw ERN, and then can repay his loan at a future date.
+
+**Liquidator** - Liquidators can liquidate unhealthy Troves (borrowing positions)
+
+**Stability pool depositor** - They act as the source of liquidity to repay debt from liquidated Troves, ensuring that the total ERN supply always remains backed.
+
+## Observation
+
+This is an intermediary audit of the Ethos V2 update that add a bunch of features:
+
+_Not all Ethos V2 of these features are implemented yet_
+
+✅ : Implemented in commit **[f51a4d0e](https://github.com/Byte-Masons/liquity-dev/tree/hooks)**
+
+❌ : Not implemented yet
+
+---
+
+- ❌ Hooks
+  - ❌ Adding calls to hooks when collateral is added or removed, troves are closed, or debt is added or removed
+  - ❌ Designing an interface and hook router to extend functionality in the future with unique incentives and promotions
+- ✅ `Leverager.sol` implementation that allow a one click leveraging loop. This add open/adjustTroveFor in `BorrowerOperations.sol` - Allowing `Leverager.sol` to modify users’ positions on their behalf
+- ❌ Fee whitelist - add a whitelist that allows certain users to bypass the borrow fee
+- ⚪ Configurable Collateral
+  - ✅ Allow new collaterals to be added
+  - ❌ Allow old collaterals to be deprecated
+  - ❌ Deposit caps of 0 can be used to facilitate the latter
+  - ✅ Adding Deposit limit
+- ✅ Lower MCR and CCR Floors - Allow MCR as low as 1.00 or 1.005 and CCR as low as 1.01 to facilitate stablecoin collateral types.
+- ❌ More modern oracle solutions
+  - ❌ Redo the oracle
+  - ❌ Consider dealing with the sequencer downtime
+
+These modifications are designed to be low touch. The changes made leave little room for new attack vectors.
+
+# Severity classification
+
+| Severity           | Impact: High | Impact: Medium | Impact: Low |
+| ------------------ | ------------ | -------------- | ----------- |
+| Likelihood: High   | High         | High           | Medium      |
+| Likelihood: Medium | High         | Medium         | Low         |
+| Likelihood: Low    | Medium       | Low            | Low         |
+
+**Impact** - the technical, economic and reputation damage of a successful attack
+
+**Likelihood** - the chance that a particular vulnerability gets discovered and exploited
+
+**Severity** - the overall criticality of the risk
+
+# Security Assessment Summary
+
+**_review commit hash_ -** [f51a4d0e](https://github.com/Byte-Masons/liquity-dev/tree/hooks)
+
+**_fixes review commit hash_ -** [a8a28fb6](https://github.com/Byte-Masons/Ethos-V2-contracts/commit/a8a28fb6c6fee11b601fbcc1bc38f422a04446b4)
+
+### Deployment chain
+
+- Optimism
+
+### Scope
+
+The following smart contracts were in scope of the audit with their V2 update description:
+
+- New contracts:
+  - `Leverager.sol`
+  - `LiquidationHelper.sol`
+- Modified contracts:
+  - `ActivePool.sol`
+    - Add `LiquidationHelper.sol` support
+  - `CollSurplusPool.sol`
+    - Add `LiquidationHelper.sol` support
+  - `StabilityPool.sol`
+    - Add `LiquidationHelper.sol` support
+  - `SortedTroves.sol`
+    - Modify the return value of `reInsert()` and `insert()` to support `Leverager.sol`
+  - `BorrowerOperations.sol`
+    - Allowing `Leverager.sol` to modify users’ positions on their behalf
+  - `CollateralConfig.sol`
+    - New **MIN_ALLOWED_MCR** and **MIN_ALLOWED_CCR** values
+    - Add limit caps for collateral
+    - Allow the admit to update the limit
+  - `TroveManager.sol`
+    - Liquidation logic has been moved to `LiquidationHelper.sol`
+
+Representing 2878 SLoC but with a focus on the diff between `master` and **[f51a4d0e](https://github.com/Byte-Masons/liquity-dev/tree/hooks).**
+
+---
+
+# Findings Summary
+
+Summary :
+
+- 0 High
+- 2 Mediums
+- 2 Lows
+- 2 Informationals
+
+| ID     | Title                                                                            | Status |
+| ------ | -------------------------------------------------------------------------------- | ------ |
+| [M-01] | Pricefeed contracts does not adjust its TIMEOUT value for different collaterals  | Fix    |
+| [M-02] | Admin can add again a collateral with addNewCollateral()                         | Fix    |
+| [L-01] | Collateral limit caps may partially break the initial Liquity liquidation design | Ack    |
+| [L-02] | Centralization risk: Leverage.setAddresses() is callable multiple times          | Fix    |
+
+# [M-01] Pricefeed contracts does not adjust its `TIMEOUT` value for different collaterals.
+
+[PriceFeed.sol#L44](https://github.com/Byte-Masons/liquity-dev/blob/d79cc3649d04ea40f41c3f0b734e53aa8e62e120/packages/contracts/contracts/PriceFeed.sol#L44)
+
+## Severity
+
+**Impact:** Low - If second oracle works | High - if second oracle is not trustworthy
+
+**Likelihood:** High - This will happen in stable market condition
+
+## Description
+
+The `PriceFeed` contract will be improved in V2, but for now it uses Chainlink as the primary oracle and Tellor as the fallback. It includes logic for switching oracles based on oracle failures, timeouts, and conditions for choosing between the primary and fallback oracles.
+
+There are 2 things that can trigger a Chainlink price update. The **Deviation threshold** or The **heartbeat**. En each price feed has its own configuration :
+
+The actual `TIMEOUT` is 14400 sec (4 hours) which may not be enough for some price feeds.
+
+## POC
+
+| ChainLink PriceFeed | Deviation threshold | Heartbeat  |
+| ------------------- | ------------------- | ---------- |
+| ETH / USD           | 0.15%               | 30 minutes |
+| WBTC / USD          | 0.1%                | 30 minutes |
+| OP / USD            | 0.2%                | 30 minutes |
+| wstETH / USD        | 0,5%                | 24 hours   |
+
+Knowing that Ethos wants to support LST tokens (like **wstETH**) which has a heartbeat of 86400 sec (24 hours) on the **[wstETH / USD](https://data.chain.link/optimism/mainnet/crypto-usd/wsteth-usd)** Optimism pricefeed. If implemented, this pricefeed will be considered broken by the `Pricefeed` contract mechanism and use the fallback oracle instead of the main one even if the price is updated.
+
+This can happen in stable market conditions since the **wstETH** price will not be updated if its price stays in the 0,5% threshold for more than 4 hours.
+
+## Recommendations
+
+Adapt the `TIMEOUT` value to each collaterals by adding a new configuration parameters in CollateralConfig: [CollateralConfig.sol#L27-L33](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/CollateralConfig.sol#L27-L33)
+
+```solidity
+struct Config {
+    bool allowed;
+    uint256 decimals;
+    uint256 MCR;
+    uint256 CCR;
+    uint256 limit;
+		uint256 chainlinkTimeout; ⬅️
+}
+```
+
+# [M-02] Admin can add again a collateral with `addNewCollateral()`
+
+[CollateralConfig.sol#L66-L85](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/CollateralConfig.sol#L66-L85)
+
+## Severity
+
+**Impact:** High - The admin can arbitrarily increase the CCR and MCR ratio and create a huge liquidation cascade and break the `LQTYStacking` and `StabilityPool` contract.
+
+**Likelihood:** Low - Requires an admin error or a compromised key.
+
+## Description
+
+The admin can do 2 things that he should not be able to do:
+
+- Increase the CCR and MCR: When normally it can only be decrease.
+- Duplicate a collateral in the `[collaterals[]](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/CollateralConfig.sol#L70)` list
+
+This is possible because `[updateCollateralRatios()](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/CollateralConfig.sol#L66C14-L66C30)` function does not check if the collateral is already allowed or not.
+
+## POC
+
+Calling `updateCollateralRatios()` twice with the same collateral address will duplicate the address in `collaterals[]` list and overwrite the configuration in `collateralConfig` mapping.
+
+So the admin can arbitrarily increase the CCR and MCR ratio and create a huge liquidation cascade when normally this is not allowed as this check shows: [CollateralConfig.sol#L91-L92](https://github.com/Byte-Masons/liquity-dev/blob/d79cc3649d04ea40f41c3f0b734e53aa8e62e120/packages/contracts/contracts/CollateralConfig.sol#L91-L92)
+
+```jsx
+require(_MCR <= config.MCR, 'Can only walk down the MCR')
+require(_CCR <= config.CCR, 'Can only walk down the CCR')
+```
+
+Moreover, the duplicate address in the `collaterals[]` list will break the internal accounting in the `LQTYStacking` and `StabilityPool` contract.
+
+Here is some code snippet where having duplicate collaterals results in unexpected multiple sending of collateral amount:
+
+- [StabilityPool.sol#L359-L364](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/StabilityPool.sol#L359-L364)
+- [LQTYStaking.sol#L245-L254](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/LQTY/LQTYStaking.sol#L245-L254)
+
+## Recommendations
+
+Check if the collateral added is already allowed: [CollateralConfig.sol#L66-L85](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/CollateralConfig.sol#L66-L85)
+
+```solidity
+function addNewCollateral(
+    address _collateral,
+    uint256 _MCR,
+    uint256 _CCR,
+    uint256 _limit
+) public onlyOwner {
+    require(_collateral != address(0), "cannot be 0 address");
+		require(!collateralConfig.allowed, "collateral already allowed"); ⬅️
+    address collateral = _collateral;
+    checkContract(collateral);
+    collaterals.push(collateral);
+
+    Config storage config = collateralConfig[collateral];
+    config.allowed = true;
+    uint256 decimals = IERC20(collateral).decimals();
+    config.decimals = decimals;
+    config.limit = _limit;
+
+    require(_MCR >= MIN_ALLOWED_MCR, "MCR below allowed minimum");
+    config.MCR = _MCR;
+
+    require(_CCR >= MIN_ALLOWED_CCR, "CCR below allowed minimum");
+    config.CCR = _CCR;
+
+    emit CollateralWhitelisted(collateral, decimals, _MCR, _CCR);
+}
+```
+
+# \***\*Quality Assurance\*\***
+
+## [L-01] Collateral limit caps may partially break the initial Liquity liquidation design
+
+[CollateralConfig.sol#L32](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/CollateralConfig.sol#L32)
+
+### Description
+
+V2 introduce collateral limit caps, but this may limit access to liquidity during high liquidations periods.
+
+One of the biggest challenge of stablecoin design is to make sure that there will always be enough liquidity to liquidate positions. To handle this, stablecoin design tries to provide solutions to mitigate this case. For example, the DSR for Dai or the StabilityPool for liquidity.
+
+But the most classical way to get liquidity (and be able to liquidate a position) is just to open a new position. So I think limit caps could be a problem in some really rare market conditions.
+
+On the other hand, the Ethos multi-collateral design mitigates this problem by allowing you to borrow in another collateral if a given collateral reaches the limit.
+
+### Recommendations
+
+A solution may be to disable the limit in recovery mode: [TroveManager.sol#L1057](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/TroveManager.sol#L1057)
+
+```jsx
+function increaseTroveDebt(
+    address _borrower,
+    address _collateral,
+    uint _debtIncrease,
+		bool _isRecoveryMode ⬅️
+) external override returns (uint) {
+    _requireCallerIsBorrowerOperations();
+		if(!_isRecoveryMode) { ⬅️
+		    require(
+		        collateralConfig.getCollateralLimit(_collateral) >=
+		            getEntireSystemDebt(_collateral).add(_debtIncrease)
+
+		    );
+		}
+    uint newDebt = Troves[_borrower][_collateral].debt.add(_debtIncrease);
+    Troves[_borrower][_collateral].debt = newDebt;
+    return newDebt;
+}
+```
+
+## [L-02] Centralization risk: `Leverage.setAddresses()` is callable multiple times
+
+[Leverager.sol#L54-L92](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/Leverager.sol#L54-L92)
+
+### Description
+
+`Leverage.setAddresses()` must act like a constructor and should not be called more than once.
+
+### Recommendations
+
+Make `Leverage.setAddresses()` callable only once:
+
+```solidity
+bool public initialized; ⬅️
+
+function setAddresses(
+    address _borrowerOperationsAddress,
+    address _collateralConfigAddress,
+    address _troveManagerAddress,
+    address _activePoolAddress,
+    address _defaultPoolAddress,
+    address _priceFeedAddress,
+    address _lusdTokenAddress,
+    address _swapperAddress
+) external onlyOwner {
+		require(!initialized, "Leverager already initialized"); ⬅️
+		initialized = true; ⬅️
+
+    checkContract(_borrowerOperationsAddress);
+    checkContract(_collateralConfigAddress);
+    checkContract(_troveManagerAddress);
+    checkContract(_activePoolAddress);
+    checkContract(_defaultPoolAddress);
+    checkContract(_priceFeedAddress);
+    checkContract(_lusdTokenAddress);
+    checkContract(_swapperAddress);
+
+    borrowerOperations = IBorrowerOperations(_borrowerOperationsAddress);
+    collateralConfig = ICollateralConfig(_collateralConfigAddress);
+    troveManager = ITroveManager(_troveManagerAddress);
+    activePool = IActivePool(_activePoolAddress);
+    defaultPool = IDefaultPool(_defaultPoolAddress);
+    priceFeed = IPriceFeed(_priceFeedAddress);
+    lusdToken = IERC20(_lusdTokenAddress);
+    swapper = ISwapper(_swapperAddress);
+
+    emit BorrowerOperationsAddressChanged(_borrowerOperationsAddress);
+    emit CollateralConfigAddressChanged(_collateralConfigAddress);
+    emit TroveManagerAddressChanged(_troveManagerAddress);
+    emit ActivePoolAddressChanged(_activePoolAddress);
+    emit DefaultPoolAddressChanged(_defaultPoolAddress);
+    emit PriceFeedAddressChanged(_priceFeedAddress);
+    emit LUSDTokenAddressChanged(_lusdTokenAddress);
+    emit SwapperAddressChanged(_swapperAddress);
+}
+```
+
+## [I-01] Deleverage feature can be more efficient
+
+[Leverager.sol#L413](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/Leverager.sol#L413)
+
+The `_delever()` function in `Leverage.sol` tries to keep the CR at the current ICR during the delever operation.
+
+Since we are only trying to close the leveraged trove, the target CR can just be set to CCR. This will reduce the number of loops, improve the delever's chance of success, and reduce the amount of ERN to initially provide.
+
+But there is a downside: in some rare cases, making this change will cause the transaction to fail. Even if it's temporary, setting the target CR to CCR can put the system into recovery mode, which will cause the deleveraging attempt to revert. ([BorrowerOperations.sol#L654](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/BorrowerOperations.sol#L654))
+
+## [I-02] Useless `_requireCallerIsTroveManager()` check in the `LH.liquidate()` function
+
+[LiquidiationHelper.sol#L109](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/LiquidiationHelper.sol#L109)
+
+This `_requireCallerIsTroveManager()` is useless since the check is already in `batchLiquidateTroves()` [LiquidiationHelper.sol#L514](https://github.com/Byte-Masons/liquity-dev/blob/6034154fed2a16f04fa59c5f906365878975cec1/packages/contracts/contracts/LiquidiationHelper.sol#L514)
