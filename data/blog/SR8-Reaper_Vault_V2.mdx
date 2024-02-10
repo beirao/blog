@@ -1,0 +1,202 @@
+---
+title: '#8 Solo Review: Reaper Vault V2'
+date: '2024-02-03'
+tags: ['reports']
+draft: false
+summary: 'Reaper Vault V2 is similar to Yearn vaults. The goal is to generate yield through multiple strategies.'
+---
+
+# Introduction
+
+A time-boxed security review of the **Reaper Vault V2** protocol was done by [Beirao](https://www.beirao.xyz/about), with a focus on the security aspects of the application's smart contracts implementation.
+
+# Disclaimer
+
+A smart contract security review can never verify the complete absence of vulnerabilities. This is a time, resource and expertise bound effort where I try to find as many vulnerabilities as possible. I can not guarantee 100% security after the review or even if the review will find any problems with your smart contracts. Subsequent security reviews, bug bounty programs and on-chain monitoring are strongly recommended.
+
+# About Beirao
+
+I’m an independent smart contract security researcher. I extend my skills as a contractor specializing in EVM smart contracts security. If you're in need of robust code review, I'm here to help. We can get in touch via [Twitter](https://twitter.com/0xBeirao) or [Email](mailto:beirao.dev@icloud.com).
+
+# About Reaper Vault V2
+
+This security review is not intended to look at the entire system in detail, but focuses mainly on changes between 2 commits. ([4839d407...c4ea7086](https://github.com/Byte-Masons/vault-v2/compare/4839d4072a1301f681de5b3d6bd7121a5aa3bb9c...c4ea70864a0af8dc9b26f83127a6452b5b8d9911))
+
+Reaper Vault V2 is a vault similar to Yearn vaults. The goal is to generate yield through multiple strategies. These strategies are connected to the `ReaperVaultV2` and can be added/removed/modified by the admin. Then the end user can simply deposit funds into the vault and earn a yield without having to worry about all the underlying strategies.
+
+# Severity classification
+
+| Severity           | Impact: High | Impact: Medium | Impact: Low |
+| ------------------ | ------------ | -------------- | ----------- |
+| Likelihood: High   | High         | High           | Medium      |
+| Likelihood: Medium | High         | Medium         | Low         |
+| Likelihood: Low    | Medium       | Low            | Low         |
+
+**Impact** - the technical, economic and reputation damage of a successful attack
+
+**Likelihood** - the chance that a particular vulnerability gets discovered and exploited
+
+**Severity** - the overall criticality of the risk
+
+# Security Assessment Summary
+
+**_review commit hash_ -** [c4ea7086](https://github.com/Byte-Masons/vault-v2/commit/c4ea70864a0af8dc9b26f83127a6452b5b8d9911)
+
+**_fixes review commit hash_ -** [307bc13b](https://github.com/Byte-Masons/vault-v2/commit/307bc13bc21a7449703dc03681add26c398c7a5c)
+
+### Scope
+
+The following smart contracts were in scope of the audit: (total : 773 SLoC)
+
+- `ReaperBaseStrategyv4.sol`
+- `ReaperSwapper.sol`
+- `mixins/BalMixin.so`
+- `mixins/UniV2Mixin.sol`
+- `mixins/UniV3Mixin.sol`
+- `mixins/ThenaRamMixin.sol`
+
+---
+
+# Findings Summary
+
+Summary :
+
+- 1 Medium
+- 2 Lows
+- 1 Improvement
+
+| ID     | Title                                                                   | Status |
+| ------ | ----------------------------------------------------------------------- | ------ |
+| [M-01] | No protection of uninitialized implementation contracts from attacker   | ack    |
+| [L-01] | No retro compatibility with some past strategies                        | fix    |
+| [L-02] | Lack of transparency in the implementation contract prior to an upgrade | ack    |
+
+# Detailed Findings
+
+# [M-01] No protection of uninitialized implementation contracts from attacker
+
+[ReaperBaseStrategyv4.sol#L90](https://github.com/Byte-Masons/vault-v2/blob/c4ea70864a0af8dc9b26f83127a6452b5b8d9911/src/ReaperBaseStrategyv4.sol#L90)
+
+## Description
+
+When using upgradeable smart contracts, all interactions occur with the contract instance, not the underlying implementation contract.
+
+A malicious actor sending transactions directly to the implementation contract does not pose a significant threat because changes made to the state of the implementation contract will not affect the contract instance as the implementation contract's storage is never used.
+
+However, there is an exception to this rule. If a direct call to the implementation contract results in a self-destruct operation, the implementation contract will be eliminated, and all instances of your contract will delegate calls to a code-less address rendering all contract instances in the project inoperable.
+
+Similarly, if the implementation contract contains a `delegatecall()` operation and is made to delegate a call to a malicious contract with a self-destruct function, the calling contract will also be destroyed.
+
+Since `ReaperBaseStrategyv4` is a base contract and we don't know exactly what will be built on it, I think this should be patch to prevent any mistake.
+
+## Recommendations
+
+All contracts using `UUPSUpgradeable` should make sure that the contract implementation is initialized so no one can perform any upgrade and self-destruct the implementation contract itself.
+
+Add `_disableInitializers();` in the `ReaperBaseStrategyv4` constructor:
+
+```solidity
+constructor() initializer {
+	_disableInitializers();
+}
+```
+
+# [L-01] No retro compatibility with some past strategies
+
+[ReaperSwapper.sol#L141-L162](https://github.com/Byte-Masons/vault-v2/blob/c4ea70864a0af8dc9b26f83127a6452b5b8d9911/src/ReaperSwapper.sol#L141-L162)
+
+## Description
+
+The new implementation should be keeping the previous interfaces.
+
+Past strategies may be using this interface for swapping: (here for UniV2 but same for others)
+
+`function swapUniV2(address _from, address _to, uint256 _amount, MinAmountOutData memory _minAmountOutData, address _router, uint256 _deadline) public {}`
+
+But you have actually removed this interface causing a retro compatibility issue.
+
+## Recommendations
+
+Should be from this: [ReaperSwapper.sol#L141-L162](https://github.com/Byte-Masons/vault-v2/blob/c4ea70864a0af8dc9b26f83127a6452b5b8d9911/src/ReaperSwapper.sol#L141-L162)
+
+To this: (for UniV2, UniV3, Bal and TheRam)
+
+```solidity
+function swapUniV2(
+    address _from,
+    address _to,
+    uint256 _amount,
+    MinAmountOutData memory _minAmountOutData,
+    address _router,
+    uint256 _deadline,
+    bool _tryCatchActive
+) public pullFromBefore(_from, _amount) pushFromAndToAfter(_from, _to) returns (uint256) {
+    uint256 minAmountOut = _calculateMinAmountOut(_from, _to, _amount, _minAmountOutData);
+    return _swapUniV2(_from, _to, _amount, minAmountOut, _router, _deadline, _tryCatchActive);
+}
+
+function swapUniV2(
+    address _from,
+    address _to,
+    uint256 _amount,
+    MinAmountOutData memory _minAmountOutData,
+    address _router,
+    uint256 _deadline,
+) public pullFromBefore(_from, _amount) pushFromAndToAfter(_from, _to) returns (uint256) {
+    uint256 minAmountOut = _calculateMinAmountOut(_from, _to, _amount, _minAmountOutData);
+    return _swapUniV2(_from, _to, _amount, minAmountOut, _router, _deadline, true);
+}
+
+function swapUniV2(
+    address _from,
+    address _to,
+    uint256 _amount,
+    MinAmountOutData memory _minAmountOutData,
+    address _router
+) external returns (uint256) {
+    return swapUniV2(_from, _to, _amount, _minAmountOutData, _router, block.timestamp, true);
+}
+```
+
+**By the way, you should also update `ISwapperSwaps.sol` accordingly.**
+
+# [L-02] Lack of transparency in the implementation contract prior to an upgrade
+
+[ReaperBaseStrategyv4.sol#L354-L360](https://github.com/Byte-Masons/vault-v2/blob/c4ea70864a0af8dc9b26f83127a6452b5b8d9911/src/ReaperBaseStrategyv4.sol#L354-L360)
+
+## Description
+
+Usually when there is a cooldown mechanism before an upgrade, it's to give the user time to review the upgrade and decide if they want to stay or leave the project.
+
+Here, the `initiateUpgradeCooldown()` function does not ask for the next implementation, which means that users can't review the next implementation.
+
+## Recommendations
+
+Create a new variable `nextImplementation`
+
+Modify `initiateUpgradeCooldown()` like this:
+
+```solidity
+function initiateUpgradeCooldown(address _nextImplementation) external {
+    _atLeastRole(STRATEGIST);
+		nextImplementation = _nextImplementation;
+    upgradeProposalTime = block.timestamp;
+}
+```
+
+And `_authorizeUpgrade()` like this:
+
+```solidity
+function _authorizeUpgrade(address _nextImplementation) internal override {
+    _atLeastRole(DEFAULT_ADMIN_ROLE);
+    require(
+        upgradeProposalTime + UPGRADE_TIMELOCK < block.timestamp, "Upgrade cooldown not initiated or still ongoing"
+    );
+		require(nextImplementation == _nextImplementation, "Not the right implementation");
+    clearUpgradeCooldown();
+}
+```
+
+# [I-01] Forgot to change the IVeloPair name
+
+[ThenaRamMixin.sol#L70](https://github.com/Byte-Masons/vault-v2/blob/c4ea70864a0af8dc9b26f83127a6452b5b8d9911/src/mixins/ThenaRamMixin.sol#L70)

@@ -41,7 +41,7 @@ const LayoutWrapper = ({ children }) => {
               ) : (
                 siteMetadata.headerTitle
               )}
-              <a
+              {/* <a
                 // onClick={() => setModalOpen(!modalOpen)}
                 target="_blank"
                 rel="noreferrer"
@@ -49,7 +49,7 @@ const LayoutWrapper = ({ children }) => {
                 className="ml-1 block rounded-lg bg-gradient-to-r from-orange-600 to-orange-400 p-2 px-2 text-xs font-bold text-white opacity-80 hover:from-orange-400 hover:to-orange-600 md:hidden"
               >
                 Request an audit 🕵️‍♂️
-              </a>
+              </a> */}
             </div>
           </div>
           <div className="flex items-center text-base leading-5">
@@ -64,7 +64,7 @@ const LayoutWrapper = ({ children }) => {
                 </Link>
               ))}
 
-              <a
+              {/* <a
                 // onClick={() => setModalOpen(!modalOpen)}
                 target="_blank"
                 rel="noreferrer"
@@ -72,7 +72,7 @@ const LayoutWrapper = ({ children }) => {
                 className="ml-3 rounded-lg bg-gradient-to-r from-orange-600 to-orange-400  p-2 px-4 text-sm font-bold text-white opacity-80 hover:from-orange-400 hover:to-orange-600"
               >
                 Request an audit 🕵️‍♂️
-              </a>
+              </a> */}
               {modalOpen && <ModalRequestAudit />}
             </div>
             <ThemeSwitch />

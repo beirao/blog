@@ -1,0 +1,302 @@
+---
+title: '#4 Solo Review: Harbor LGE'
+date: '2024-01-07'
+tags: ['reports']
+draft: false
+summary: 'A simple LGE system.'
+---
+
+# Introduction
+
+A time-boxed security review of the Harbor LGE protocol was done by [Beirao](https://www.beirao.xyz/about), with a focus on the security aspects of the application's smart contracts implementation.
+
+# Disclaimer
+
+A smart contract security review can never verify the complete absence of vulnerabilities. This is a time, resource and expertise bound effort where I try to find as many vulnerabilities as possible. I can not guarantee 100% security after the review or even if the review will find any problems with your smart contracts. Subsequent security reviews, bug bounty programs and on-chain monitoring are strongly recommended.
+
+# About Beirao
+
+I’m an independent smart contract security researcher. I extend my skills as a contractor specializing in EVM smart contracts security. If you're in need of robust code review, I'm here to help. We can get in touch via [Twitter](https://twitter.com/0xBeirao) or [Email](mailto:beirao.dev@icloud.com).
+
+# About Harbor LGE
+
+The goal of this small LGE system is to receive USDT in exchange for the HRB token.
+
+The `HarborLGE` contract is planned to accept USDT or WBNB directly. The user will be able to use BNB directly with the independent `Gateway` contract that will convert native BNB to WBNB and supplies it to the `HarborLGE` contract.
+
+Here are all the flows depending on the supplied token
+
+**_Using USDT_**
+
+1. _User approves HarborLGE to spend the necessary amount of USDT tokens_
+2. _When the LGE has begun, is active, and not full, the user calls buy() in HarborLGE with the following variables…_
+   1. _token USDT address in this case_
+   2. _amount amount of USDT to contribute to LGE_
+   3. _minUsdtAmountOut minimum amount returned from swap, not needed for USDT (set to 0)_
+   4. _onBehalfOf the user address contributing to the LGE_
+3. _The user may further participate in the LGE in a cumulative fashion by calling the buy() function_
+4. _After 14 days when the LGE has concluded, the 90 day grace period will begin. No more contributions can be made and Harbor tokens may not be claimed during this time._
+5. _After the 90 day grace period has concluded, user’s will be able to begin claiming their vested Harbor tokens by calling the claim() function. Tokens will linearly vest continuously over the next 90 days._
+6. _At the end of the 90 day vesting period, the user should have been able to claim the full amount of Harbor tokens owed to them_
+
+**_Using native BNB_**
+
+1. _When the LGE has begun, is active, and not full, the user calls depositBNB() in Gateway with the following variables… (the Gateway contract will call buy() in the HarborLGE contract on behalf of the user)_
+   1. _minUsdtAmountOut minimum amount returned from swap (slippage)_
+2. _The user may further participate in the LGE in a cumulative fashion by calling either the buy() or depositBNB() functions_
+3. _After 14 days when the LGE has concluded, the 90 day grace period will begin. No more contributions can be made and Harbor tokens may not be claimed during this time._
+4. _After the 90 day grace period has concluded, user’s will be able to begin claiming their vested Harbor tokens by calling the claim() function. Tokens will linearly vest continuously over the next 90 days._
+5. _At the end of the 90 day vesting period, the user should have been able to claim the full amount of Harbor tokens owed to them_
+
+## Observations
+
+The system lifetime has 4 phases:
+
+![LEG lifecycle](/static/images/blog-img/SR4-1.png)
+
+- LGE Period: Users can participate in LGE
+- Grace period: just wait.
+- Vesting period: linear distribution of HRB. Users can claim a portion of the HRB due to them.
+- End period: 100% HRB can be claimed by the user.
+
+The system looks safe by design:
+
+- by limiting concurrent possible interactions: there are only 2 possible external calls that can't be called within the same timestamp.
+- by not storing USDT: the USDT provided is sent to the treasury on each purchase. [HarborLGE.sol#L107](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L107)
+- and force feeding the system with tokens is not a threat.
+
+There are 3 areas of concern:
+
+- The Uniswap integration.
+- The bridge between the `Gateway` and the `HarborLGE` contract.
+- Ensuring that users receive the correct amount of shares based on their contribution.
+
+The manual review showed that these 3 areas were implemented correctly.
+
+The system lacks test coverage. I recommend achieving 100% coverage before deployment.
+
+## Privileged Roles & Actors
+
+Users: can `buy()` and then `claim()`
+
+Owner (multisign): can `finalizeLGE()`, `setPathToUsdt()` and `setNativeTokenGateway()`
+
+# Severity classification
+
+| Severity           | Impact: High | Impact: Medium | Impact: Low |
+| ------------------ | ------------ | -------------- | ----------- |
+| Likelihood: High   | High         | High           | Medium      |
+| Likelihood: Medium | High         | Medium         | Low         |
+| Likelihood: Low    | Medium       | Low            | Low         |
+
+**Impact** - the technical, economic and reputation damage of a successful attack
+
+**Likelihood** - the chance that a particular vulnerability gets discovered and exploited
+
+**Severity** - the overall criticality of the risk
+
+# Security Assessment Summary
+
+**_review commit hash_ - [69799a8](https://github.com/The-Granary/Silo-LGE/commit/69799a8811e6e4fc486f793c8c5885e291603b56)**
+
+**_fixes review commit hash_ -** [c4a442ea](https://github.com/The-Granary/Silo-LGE/commit/c4a442ea4f06725047c7873290f674040d054f83)
+
+### Deployment chains
+
+- BSC
+
+### Scope
+
+The following smart contracts were in scope of the audit: (total : 202 SLoC)
+
+- `Gateway.sol`
+- `HarborLGE.sol`
+
+---
+
+# Findings Summary
+
+Summary :
+
+- 1 Low
+- 7 Improvements
+- 5 Gas
+
+| ID     | Title                                                     | Status |
+| ------ | --------------------------------------------------------- | ------ |
+| [L-01] | Swap support fee on transfer tokens but HarborLGE doesn’t | Fix    |
+
+# Invariants
+
+- USDT sent should never cross `USDT_RAISE_CAP`
+- gracePeriodOver would not be over is it should not be
+- all deposit must be equal to `totalRaisedUsdt`
+- `buy()` and `claim()` must never be callable at the same timestamp
+- Once `claim()` is called once `buy()` can’t be called again
+
+# Detailed Findings
+
+## [L-01] Swap support fee on transfer tokens but `HarborLGE` doesn’t
+
+[HarborLGE.sol#L168](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L168)
+
+You are using the fee-on-transfer compatible version of `swapExactTokensForToken()` (`swapExactTokensForTokensSupportingFeeOnTransferTokens()`), but `HarborLGE` is not compatible with FoT tokens.
+
+This is just an inconsistency since you only plan to use WBNB and USDT, which are not FoT.
+
+## [I-01] Constant variables
+
+- Define `2 weeks` as `LGE_PERIOD` [HarborLGE.sol#L61](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L61)
+- Every `GRACE_PERIOD` in this block [HarborLGE.sol#L130-L134](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L130-L134) should be replaced by `VESTING_PERIOD` . For now, both periods are 90 days, but if you want to change one of these values in the future, this can be miss leading. Please double check that the suggested fix is correct.
+
+## [I-02] Lack of checks in constructors
+
+[HarborLGE.sol#L55](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L55)
+
+[Gateway.sol#L23](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/Gateway.sol#L23)
+
+You can verify that contracts are set up correctly by checking for address(0).
+
+[HarborLGE.sol#L60](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L60)
+
+Check that lgeStart is greater than `block.timestamp` in the HarborLGE constructor
+
+## [I-03] Slippage protection overhead
+
+[HarborLGE.sol#L92](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L92)
+
+Why not just use the Uniswap’s built in slippage protection mechanism?
+
+[HarborLGE.sol#L161-L176](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L161-L176)
+
+```solidity
+function _swapTokenToUsdt(address token, uint256 amount, + uint minUsdtAmountOut) internal returns (uint256 usdtValue) {
+    if (amount == 0) {
+        return 0;
+    }
+
+    uint256 usdtBalBefore = usdt.balanceOf(address(this));
+
+    IERC20(token).safeIncreaseAllowance(unirouter, amount);
+    IUniswapV2Router02(unirouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        amount,
+   +    minUsdtAmountOut,
+        pathToUsdt[token],
+        address(this),
+        block.timestamp
+    );
+    usdtValue = usdt.balanceOf(address(this)) - usdtBalBefore;
+}
+```
+
+## [I-04] Unused import
+
+[HarborLGE.sol#L8](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L8)
+
+IERC721 is imported but never used.
+
+## [I-05] No events
+
+There are no events in either contract. You may want to add events for at least `HarborLGE.buy()` and `HarborLGE.claim()`.
+
+## [I-06] Only add the necessary amount of HBR
+
+[HarborLGE.sol#L186-L195](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L186-L195)
+All tokens sent to `HarborLGE` beyond `HBR_ALLOCATED` will be lost. So we might want to send the correct amount in case someone has manually sent HBR.
+
+```solidity
+function finalizeLGE() external onlyOwner {
+    if (block.timestamp <= lgeEnd + GRACE_PERIOD) {
+        revert LGE__GracePeriodNotComplete();
+    }
+
+    /// Fetch the tokens to guarantee the amount received
+		uint256 balanceHrb = hbr.balanceOf(address(this));
+		if (HBR_ALLOCATED > balanceHrb)
+		    hbr.safeTransferFrom(msg.sender, address(this), HBR_ALLOCATED - balanceHrb);
+		else
+		    hbr.safeTransfer(msg.sender, balanceHrb - HBR_ALLOCATED);
+
+    gracePeriodOver = true;
+}
+```
+
+## [I-07] `finalizeLGE()` can be removed
+
+[HarborLGE.sol#L186-L195](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L186-L195)
+
+Users will not be able to claim their token until the admin has called `finalizeLGE()`, but the vesting period will start anyway. This means that if the admin is not reactive enough, a part or all the vesting period may not be claimable.
+
+This will depend on your needs, but you can remove finalizeLGE() by adding this line in the constructor: [HarborLGE.sol#L192](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L192)
+
+and replacing this check [HarborLGE.sol#L112-L114](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L112-L114) with this one:
+
+```solidity
+if (block.timestamp <= lgeEnd + GRACE_PERIOD) {
+  revert LGE__GracePeriodNotComplete();
+}
+```
+
+with this change, the vesting period can be claimed without any need for admin intervention.
+
+# Gas
+
+## [G-01] `UserShare` structure storage optimozation
+
+[HarborLGE.sol#L47-L50](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L47-L50)
+
+```solidity
+struct UserShare {
+    uint256 usdtValue;
+    uint256 totalClaimed;
+}
+```
+
+You can safely use uint128 to win 1 storage slot.
+
+```solidity
+struct UserShare {
+    uint128 usdtValue;
+    uint128 totalClaimed;
+}
+```
+
+You will need to do all the appropriate casting.
+
+## [G-02] State variables that are used multiple times in a function should be cached in stack variables
+
+- `usdt` variable in `HarborLGE.buy()` is used 3 times.
+- `lgeEnd` in `HarborLGE.pending()` is used 2 times.
+- `_swapTokenToUsdt` in `Harbor._swapTokenToUsdt()` is used 2 times.
+
+## [G-03] Operation order can be optimized in `buy()`
+
+from:
+
+[HarborLGE.sol#L96-L103](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L96-L103)
+
+to:
+
+```jsx
+totalRaisedUsdt += usdtValue;
+
+if (totalRaisedUsdt > USDT_RAISE_CAP) {
+     revert LGE__ExceedsRaiseCap();
+}
+
+userShares[onBehalfOf].usdtValue += usdtValue;
+```
+
+## [G-04] Send `USDT` to treasury only once
+
+It's useless to send USDT to the treasury every time a user call `buy()`. You can remove this line: [HarborLGE.sol#L107](https://github.com/The-Granary/Silo-LGE/blob/69799a8811e6e4fc486f793c8c5885e291603b56/contracts/HarborLGE.sol#L107) and create this function:
+
+```jsx
+function sendUsdtToTreasury() public {
+	usdt.safeTransfer(treasury, usdt.balanceOf(address(this)));
+}
+```
+
+## [G-05] All lines can be `unchecked`
+
+I don't see any under/overflow possibilities in this system. Each line can be unchecked.

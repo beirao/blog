@@ -19,8 +19,6 @@ I started learning full development with Patrick Collins in mid-2022, and went d
 
 I'm constantly learning to make WEB3 a safer place! My mission is to audit and secure smart contracts, keeping them safe from hacks.
 
-I've already cracked the Top 150 on [Code4rena](https://code4rena.com/leaderboard) and won some rewards on [Immunefi](https://immunefi.com).
+I'm ranked #36 (2023) on [Code4rena](https://code4rena.com/leaderboard) and have won some rewards on [Immunefi](https://immunefi.com).
 
 As a result, companies have approached me to audit their smart contracts.
-
-If you're one of them and need a thorough code review or top-notch smart contract development, shoot me a [DM](https://twitter.com/0xBeirao)!

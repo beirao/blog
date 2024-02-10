@@ -1,0 +1,180 @@
+---
+title: '#6 Solo Review: Reaper Strategy - Options Token Compounder'
+date: '2024-01-20'
+tags: ['reports']
+draft: false
+summary: 'The OptionsCompounder helps to compound oTokens by exercising them at a discounted price and then exchanging the payment token for the vault asset.'
+---
+
+# Introduction
+
+A time-boxed security review of the **Options Token Compounder** protocol was done by [Beirao](https://www.beirao.xyz/about), with a focus on the security aspects of the application's smart contracts implementation.
+
+# Disclaimer
+
+A smart contract security review can never verify the complete absence of vulnerabilities. This is a time, resource and expertise bound effort where I try to find as many vulnerabilities as possible. I can not guarantee 100% security after the review or even if the review will find any problems with your smart contracts. Subsequent security reviews, bug bounty programs and on-chain monitoring are strongly recommended.
+
+# About Beirao
+
+I’m an independent smart contract security researcher. I extend my skills as a contractor specializing in EVM smart contracts security. If you're in need of robust code review, I'm here to help. We can get in touch via [Twitter](https://twitter.com/0xBeirao) or [Email](mailto:beirao.dev@icloud.com).
+
+# About **Options Token Compounder**
+
+The `OptionsCompounder` contract is an abstract token that should be implemented into a complete strategy. The `OptionsCompounder` helps to compound oTokens by exercising them at a discounted price and then exchanging the payment token for the vault asset (`want`). The `want` token can then be used in a strategy.
+
+![LEG lifecycle](/static/images/blog-img/SR6-1.png)
+
+## Flow of Options Token Compounder used in a strategy (from the documentation)
+
+The strategy must properly implement the virtual functions of the Options Token Compounder it inherits from
+
+1. Admin configures swap paths, oracles, initializer args, etc
+2. Strategy has an oToken balance
+3. Keeper calls harvestOTokens
+4. getPaymentAmount from discountExercise given oToken balance
+5. Flash loan the necessary amount of funds to exercise in paymentToken
+6. Flashloan callback -> executeOperation -> exerciseOptionAndReturnDebt
+7. oTokens are exercised using paymentToken that was flash loaned
+8. Underlying token is received by the strategy, swap entire amount into payment token to repay flashloan
+   1. Calculate minAmountOut by directly querying the same oracle consumed by the DiscountExercise we interact with
+9. Assess profitability in units of paymentToken, swap profits to want of the strategy if not same token as paymentToken
+   1. Calculate minAmountOut by directly querying the same oracle used by the DiscountExercise we interact with
+10. Assess profitability in units of wantToken
+11. Emit event reflecting the oTokens compounded
+
+## Observations
+
+If we forget about admin/config functions. The operational flow consists of
+
+- `harvestOTokens()` (limited to the KEEPER role)
+
+This `OptionsCompounder` takes place in a larger ecosystem of contracts, that are composed by:
+
+- the `reaperVaultV2`, which acts like an ERC4626 vault
+- and all the strategies implemented in that vault to generate returns.
+
+The `OptionsCompounder` seems to fit nicely into this system. It doesn't interfere with the overall system.
+
+## Privileged Roles & Actors
+
+The `OptionsCompounder` borrows the `ReaperBaseStrategyv4` access control which consists of 4 roles but only 2 are used in this contract:
+
+1. ADMIN - can configure the contract
+2. KEEPER - can call `harvestOTokens()`.
+
+# Severity classification
+
+| Severity           | Impact: High | Impact: Medium | Impact: Low |
+| ------------------ | ------------ | -------------- | ----------- |
+| Likelihood: High   | High         | High           | Medium      |
+| Likelihood: Medium | High         | Medium         | Low         |
+| Likelihood: Low    | Medium       | Low            | Low         |
+
+**Impact** - the technical, economic and reputation damage of a successful attack
+
+**Likelihood** - the chance that a particular vulnerability gets discovered and exploited
+
+**Severity** - the overall criticality of the risk
+
+# Security Assessment Summary
+
+**_review commit hash_ -** [4111464a](https://github.com/Byte-Masons/options-compounder/commit/4111464ab2bd94986a2a3d145e3022f29b7eda7e)
+
+**_fixes review commit hash_ -** [35177bf7](https://github.com/Byte-Masons/options-compounder/commit/35177bf77d9d1e48292598add28d5eb8d579710d)
+
+### Scope
+
+The following smart contracts were in scope of the audit: (total : 319 SLoC)
+
+- `OptionsCompounder.sol`
+
+---
+
+# Findings Summary
+
+Summary :
+
+- 1 High
+- 2 Lows
+- 2 Improvementss
+
+| ID     | Title                                                 | Status |
+| ------ | ----------------------------------------------------- | ------ |
+| [H-01] | Loss of fund when the Exercise contract is not funded | fix    |
+| [L-01] | lendingPool and addressProvider can't be changed      | fix    |
+| [L-02] | Initial balance of PaymentToken will never be swapped | fix    |
+
+# Detailed Findings
+
+# [H-01] Loss of fund when the `Exercise` contract is not funded
+
+## Description
+
+The Option Token contract has been modified to delay payment if the `Exercise` contract is not sufficiently funded, but this strategy has not been modified to deal with this new mechanism.
+
+If the `Exercise` contract is not sufficiently funded, the `underlyingToken` is not sent ([DiscountExercise.sol#L177](https://github.com/Byte-Masons/options-token/blob/9aa8a91e6788ada2354682e43e781e1c691af574/src/exercise/DiscountExercise.sol#L177)) and the `[claim()](https://github.com/Byte-Masons/options-token/blob/9aa8a91e6788ada2354682e43e781e1c691af574/src/exercise/DiscountExercise.sol#L105-L110)` function must be called later.
+
+Since `OptionsCompounder` never calls this claim function, any delayed funds will be lost.
+
+## Recommendations
+
+I recommend to revert if the `Exercise` contract is not enough funded.
+
+Add this line before calling `optionToken.exercise()` ([OptionsCompounder.sol#L318](https://github.com/Byte-Masons/options-compounder/blob/c91558740495530b43140179b18701d23dc304f9/src/OptionsCompounder.sol#L318))
+
+```solidity
+require(underlyingToken.balanceOf(exerciserContract) >= optionsAmount);
+```
+
+You can also choose to deal with this delayed payment mechanism, but this will require more modifications.
+
+# [L-01] `lendingPool` and `addressProvider` can't be changed
+
+## Description
+
+This can be critical if the `lendingPool` is paused or hacked, the flashloan will be inaccessible causing a DOS of the compounding feature.
+
+## Recommendations
+
+You can do a full upgrade to fix this, but I recommend adding a setter.
+
+# [L-02] Initial balance of `PaymentToken` will never be swapped
+
+[OptionsCompounder.sol#L352](https://github.com/Byte-Masons/options-compounder/blob/c91558740495530b43140179b18701d23dc304f9/src/OptionsCompounder.sol#L352)
+
+## Description
+
+To calculate the amount of `paymentToken` to swap, we subtract the `initialBalance`:
+
+```solidity
+gainInPaymentToken = (assetBalance - initialBalance) - totalAmountToPay;
+
+```
+
+This should not happen, but if there are `paymentTokens` left in the contract, they will not be swapped.
+
+## POC
+
+- KEEPER calls `harvestOTokens()` but forgets to pass a `minWantAmount` (so `minWantAmount` == 0).
+- The swap fails ([OptionsCompounder.sol#L366](https://github.com/Byte-Masons/options-compounder/blob/c91558740495530b43140179b18701d23dc304f9/src/OptionsCompounder.sol#L366)) but since the swapper (swap is in a try/catch) doesn't revert the transaction continues.
+- This last slippage check pass since `gainInWantToken == minWantAmount` [OptionsCompounder.sol#L378](https://github.com/Byte-Masons/options-compounder/blob/c91558740495530b43140179b18701d23dc304f9/src/OptionsCompounder.sol#L378)
+- Now `paymentToken` are left in the contract and can be swapped (without admin intervention)
+
+## Recommendations
+
+- Do a 0 check on `minWantAmount`.
+- You can also remove the initialBalance subtraction [OptionsCompounder.sol#L352](https://github.com/Byte-Masons/options-compounder/blob/c91558740495530b43140179b18701d23dc304f9/src/OptionsCompounder.sol#L352)
+
+```solidity
+gainInPaymentToken = assetBalance - totalAmountToPay;
+```
+
+# [I-01] The strategy can only deal with one exercise contract
+
+`oToken` can work with multiple `Exercise` contracts, but `OptionsCompounder` can only work with one.
+
+If you think that multiple exercise contracts can be a use case, you can add this support.
+
+# [I-02] `modes[]` wrong array size
+
+[OptionsCompounder.sol#L212](https://github.com/Byte-Masons/options-compounder/blob/c91558740495530b43140179b18701d23dc304f9/src/OptionsCompounder.sol#L212) should be 1 not 2.

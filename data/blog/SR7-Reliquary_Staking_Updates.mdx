@@ -1,0 +1,372 @@
+---
+title: '#7 Solo Review + fuzzing: Reliquary Staking Updates'
+date: '2024-01-27'
+tags: ['reports']
+draft: false
+summary: 'An innovative incentive distribution system inspired by MasterChef. This update improves the rewarder support and auto stake deposited assets in a gauge.'
+---
+
+# Introduction
+
+A time-boxed security review of the **Reliquary Staking Updates** was done by [Beirao](https://www.beirao.xyz/about), with a focus on the security aspects of the application's smart contracts implementation.
+
+# Disclaimer
+
+A smart contract security review can never verify the complete absence of vulnerabilities. This is a time, resource and expertise bound effort where I try to find as many vulnerabilities as possible. I can not guarantee 100% security after the review or even if the review will find any problems with your smart contracts. Subsequent security reviews, bug bounty programs and on-chain monitoring are strongly recommended.
+
+# About Beirao
+
+I’m an independent smart contract security researcher. I extend my skills as a contractor specializing in EVM smart contracts security. If you're in need of robust code review, I'm here to help. We can get in touch via [Twitter](https://twitter.com/0xBeirao) or [Email](mailto:beirao.dev@icloud.com).
+
+# About Reliquary **Staking Updates**
+
+My first Reliquary review can be found [here](https://www.beirao.xyz/blog/SR3-Reliquary).
+
+Reliquary is an improvement of the famous MasterChef contract. The goal is to distribute a reward token proportional to the amount of a user's deposit. The protocol owner can credit the contract with the reward token and set the desired issuance per second.
+
+Compared to Masterchef, the `Reliquary` contract offers more flexibility and customization:
+
+> _From the README_
+>
+> 1. Emits tokens based on the maturity of a user's investment, separated in tranches.
+> 2. Binds variable emission rates to a base emission curve designed by the developer for predictable emissions.
+> 3. Supports deposits and withdrawals along with these variable rates, which has historically been impossible.
+> 4. Issues a 'financial NFT' to users which represents their underlying positions, able to be traded and leveraged without removing the underlying liquidity.
+> 5. Can emit multiple types of rewards for each investment, as well as handle complex reward mechanisms based on deposit and withdrawal.
+
+---
+
+The **Reliquary Staking Updates**:
+
+- adds support for Thena LP tokens with automatic investment in Thena Gauge.
+- Improved support for rewarder modules
+- New "rolling" rewarder that use the same Reliquary reward logic
+
+## Observations
+
+There are still some parts of the rolling rewarder logic (parent and child) that are not well covered by unit tests. Some high severity issues could have been caught with more testing. I strongly recommend improving the test suite before deployment.
+
+## Privileged Roles & Actors
+
+**Reliquary**
+
+- Admin roles (All set to the same multisig):
+  - `DEFAULT_ADMIN_ROLE`: can add new pools
+  - `OPERATOR`: can modify pools
+  - `EMISSION_CURVE` : can modify the emission curve
+- User:
+  - open/close/manage position
+
+**Parent** **RewarderRolling**
+
+- Admin roles:
+  - `REWARD_SETTER`: can set a new reward multiplier for the parent reward token
+  - `CHILD_SETTER`: can set a new child rewarders
+
+**child** **RewarderRolling**
+
+- Admin roles:
+  - owner: can update distribution period
+
+# Severity classification
+
+| Severity           | Impact: High | Impact: Medium | Impact: Low |
+| ------------------ | ------------ | -------------- | ----------- |
+| Likelihood: High   | High         | High           | Medium      |
+| Likelihood: Medium | High         | Medium         | Low         |
+| Likelihood: Low    | Medium       | Low            | Low         |
+
+**Impact** - the technical, economic and reputation damage of a successful attack
+
+**Likelihood** - the chance that a particular vulnerability gets discovered and exploited
+
+**Severity** - the overall criticality of the risk
+
+# Security Assessment Summary
+
+**_review commit hash_ -** [856d629a](https://github.com/Byte-Masons/Reliquary/commit/856d629a542b863f6c8a350a367bdca26af2716b)
+
+**_fixes review commit hash_ -** [595ac20c](https://github.com/Byte-Masons/Reliquary/commit/595ac20c8d21aaa60e47eb1108ec90792b0af4cc)
+
+### Deployment chains
+
+- Optimism
+
+### Scope
+
+The following smart contracts were in scope of the audit: (total : 1017 SLoC)
+
+- `contracts/Reliquary.sol`
+- `contracts/rewarders/ParentRewarder-Rolling.sol`
+- `contracts/rewarders/RollingRewarder.sol`
+- `contracts/rewarders/RewardsPool.sol`
+
+# Findings Summary
+
+Summary :
+
+- 3 Highs
+- 1 Medium
+- 3 Lows
+
+| ID     | Title                                                                          | Status |
+| ------ | ------------------------------------------------------------------------------ | ------ |
+| [H-01] | thenaReceiver can’t claim gauge rewards                                        | fix    |
+| [H-02] | Shift() function is shifting Levels incorrectly                                | fix    |
+| [H-03] | rewardCredit[] is not reset in onReward                                        | fix    |
+| [M-01] | onHooks do not account for the parents reward token (only onReward do)         | fix    |
+| [L-01] | withdrawAndHarvest() don't work since you don't call withdrawFromGauge() in it | fix    |
+| [L-02] | Once enable, admin can't disable a gauge.                                      | fix    |
+| [L-03] | Anyone can delay the issuance of rewards at low cost                           | fix    |
+
+# Invariants implemented with Echidna
+
+- ✅ A user should never be able to withdraw more than deposited.
+- ✅ No `position.entry` should be greater than `block.timestamp`.
+- ✅ The sum of all `position.amount` should never be greater than total deposit.
+- ❌ [H-02] The sum of balances in levels should never be greater than total deposit.
+- ✅ All arrays defining pools should be equal in size.
+- ✅ The sum of all `allocPoint` must be equal to `totalAllocpoint`.
+- ❌ [H-02] The total reward harvested and pending should never be greater than the total emission rate.
+- ✅ A position amount should never be greater than the `level.balance` deposited at the position level.
+
+# Detailed Findings
+
+# [H-01] `thenaReceiver` can’t claim gauge rewards
+
+[DoubleStakingLogic.sol#L64](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/libraries/DoubleStakingLogic.sol#L64)
+
+## Description
+
+You should be using `gauge.getReward()` instead of `gauge.getReward(address user)` . The second one is restricted.
+
+`thenaReceiver` can’t claim gauge rewards here.
+
+proof: [GaugeV2.sol#L278-L303](https://github.com/ThenafiBNB/THENA-Contracts/blob/f5bc742e1ff16c8be308a271a6a4a0e8f9e06453/contracts/GaugeV2.sol#L278-L303)
+
+## POC
+
+```solidity
+function test_h1() public {
+    reliquary.setReceiver(address(this));
+    reliquary.enableGauge(0);
+
+    address user1 = makeAddr("user1");
+    deal(address(poolToken), user1, 100 ether);
+
+    vm.startPrank(user1);
+    IERC20Metadata(address(poolToken)).approve(address(reliquary), type(uint).max);
+    reliquary.createRelicAndDeposit(user1, 0, 100 ether);
+    vm.stopPrank();
+
+    skip(7 days);
+    console.log(thenaToken.balanceOf(address(this)));
+
+    reliquary.claimThenaRewards(0);
+
+    console.log(thenaToken.balanceOf(address(this)));
+}
+```
+
+## Recommendations
+
+You will need to add this line in `interfaces/IGauge.sol`:
+
+```solidity
+function getReward() external;
+```
+
+And change this in `libraries/DoubleStakingLogic.sol`:
+
+```solidity
+function claimThenaRewards(PoolInfo[] storage poolInfo, address thenaToken, address thenaReceiver, uint256 _pid) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        if (pool.gaugeInfo.isGauge) {
+            // claim the thena rewards
+ -          pool.gaugeInfo.gauge.getReward(address(this));
+ +          pool.gaugeInfo.gauge.getReward();
+            IERC20(thenaToken).safeTransfer(thenaReceiver, IERC20(thenaToken).balanceOf(address(this)));
+        }
+    }
+```
+
+# [H-02] `Shift()` function is shifting `Levels` incorrectly
+
+[Reliquary.sol#L533](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/Reliquary.sol#L533)
+
+## Description
+
+The error is due to passing `fromAmount` instead of `amount` in `ReliquaryLogic._shiftLevelBalances()` , so levels are updated using `fromAmount` but positions are updated correctly using `amount`.
+
+![Fuzzing result 1](/static/images/blog-img/SR7-1.png)
+
+![Fuzzing result 1](/static/images/blog-img/SR7-2.png)
+
+This bug creates a global mess in the internal accounting, causing possible deposit and withdrawal DOS.
+
+In addition, fuzzing has shown that the theoretical maximum emission can be exceeded, which is critical.
+
+## Recommendations
+
+[Reliquary.sol#L527-L538](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/Reliquary.sol#L527-L538)
+
+```solidity
+ReliquaryLogic._shiftLevelBalances(
+    ReliquaryLogic.shiftBalancesVars(
+        vars.fromLevel,
+        vars.oldToLevel,
+        vars.newToLevel,
+        vars.poolId,
+    -   vars.fromAmount,
+		+		amount, //<
+        vars.toAmount,
+        vars.newToAmount
+    ),
+    levels
+);
+```
+
+# [H-03] `rewardCredit[]` is not reset in `onReward`
+
+[RollingRewarder.sol#L60-L82](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/rewarders/RollingRewarder.sol#L60-L82)
+
+## Description
+
+Triggering `onReward` will yield the `rewardCredit` of the `relicId` without any reset. So an attacker is able to call `onReward` over and over again and drain all the `rewardToken` balances.
+
+## Recommendations
+
+```solidity
+function onReward(
+        uint relicId,
+        uint, // rewardAmount
+        address to,
+        uint amount,
+        uint oldLevel,
+        uint newLevel
+    ) external virtual override(IRewarder, SingleAssetRewarder) onlyParent {
+        uint256 oldAmountMultiplied = amount * multipliers[oldLevel];
+        uint256 newAmountMultiplied = amount * multipliers[newLevel];
+
+        _issueTokens(_poolBalance());
+
+        uint256 pending = ((oldAmountMultiplied * accRewardPerShare) /
+            ACC_REWARD_PRECISION) - rewardDebt[relicId];
+        pending += rewardCredit[relicId]; // @audit rewardCredit is not reset
+
+  +     rewardCredit[relicId] = 0 //<
+
+        rewardDebt[relicId] = ((newAmountMultiplied * accRewardPerShare) /
+            ACC_REWARD_PRECISION);
+        if (pending > 0) {
+            IERC20(rewardToken).safeTransfer(to, pending);
+            emit LogOnReward(relicId, pending, to);
+        }
+    }
+```
+
+# [M-01] `onHooks` do not account for the parents reward token (only `onReward` do)
+
+[ParentRewarder.sol#L82](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/rewarders/ParentRewarder.sol#L82)
+
+## Description
+
+As the documentation says: ”Reliquary’s system had two minor flaws that made it impossible to properly track its state from a rewarder. The functions merge, split and shift do change state but never call the rewarder, as opposed to, for example, withdraw, which calls the onWithdraw rewarder hook.”
+
+If we put ourselves in the perspective of a developer discovering the code, he might think that the ParentRewardToken will be fully supported by the system, but this won't be the case. This can be misleading.
+
+## Recommendations
+
+This is not a problem in your current setup because `rewardMultiplier` is set to 0. ([ParentRewarder-Rolling.sol#L35](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/rewarders/ParentRewarder-Rolling.sol#L35)). But I think the parent rewarder logic should be removed, or at least `rewardMultiplier` should be hardcoded to 0.
+
+# [L-01] `withdrawAndHarvest()` don't work since you don't call `withdrawFromGauge()` in it
+
+[Reliquary.sol#L327-L337](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/Reliquary.sol#L327-L337)
+
+## Description
+
+If a gauge is enabled on a pool, `withdrawAndHarvest()` will don't work because `withdrawFromGauge()` is not called in it.
+
+It’s a low because users can still call `harvest()` and `withdraw()` separately.
+
+## Recommendations
+
+```solidity
+function withdrawAndHarvest(uint amount, uint relicId, address harvestTo) external override nonReentrant {
+    if (amount == 0) revert ZeroAmount();
+    _requireApprovedOrOwner(relicId);
+
+    (uint poolId, uint receivedReward) = _updatePosition(amount, relicId, Kind.WITHDRAW, harvestTo);
+
++		updatePoolWithGaugeDeposit(poolId);
++		withdrawFromGauge(poolId, amount);
+
+    IERC20(poolToken[poolId]).safeTransfer(msg.sender, amount);
+
+    emit ReliquaryEvents.Withdraw(poolId, amount, msg.sender, relicId);
+    emit ReliquaryEvents.Harvest(poolId, receivedReward, harvestTo, relicId);
+}
+```
+
+# [L-02] Once enable, admin can't disable a gauge.
+
+[Reliquary.sol#L879-L881](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/Reliquary.sol#L879-L881)
+
+## Description
+
+In case of a black swan event, or just if the gauge is not yielding any more, the admin should be able to disable the gauge investment.
+
+## Recommendations
+
+Add this function in `Reliquary`:
+
+```solidity
+function disableGauge(uint256 _pid) public onlyRole(OPERATOR) {
+    DoubleStakingLogic.disableGauge(poolInfo, _pid);
+}
+```
+
+Add this function in `DoubleStakingLogic`:
+
+```solidity
+function disableGauge(
+    PoolInfo[] storage poolInfo,
+    uint256 _pid
+) internal {
+    poolInfo[_pid].gaugeInfo = GaugeInfo(false, IGauge(address(0));
+}
+```
+
+# [L-03] Anyone can delay the issuance of rewards at low cost
+
+[RewardsPool.sol#L20-L24](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/rewarders/RewardsPool.sol#L20-L24)
+
+[RollingRewarder.sol#L241-L265](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/rewarders/RollingRewarder.sol#L241-L265)
+
+## Description
+
+Only funding 1 wei of `rewardToken` in `PoolReward` and calling `fundRewarder()` will extend the distribution period of not issued funds.
+
+Since anyone can call `fundRewarder()` , someone might take advantage of this.
+
+## POC
+
+- Alice will have money to invest in 7 days
+- But the reward distribution will end in 7 days.
+- To get a part of this reward, Alice will fund `PoolReward` with 1 Wei and call `fundRewarder()` every day.
+- 7 days pass => The distribution period has been extended.
+- Alice can now invest her money and get the reward she was not supposed to get.
+
+## Recommendations
+
+[RewardsPool.sol#L20-L24](https://github.com/Byte-Masons/Reliquary/blob/856d629a542b863f6c8a350a367bdca26af2716b/contracts/rewarders/RewardsPool.sol#L20-L24)
+
+You may want to keep control of how the reward is funded. `fundRewarder()` in `PoolReward` should be limited.
+
+```solidity
+function fundRewarder() external {
+    uint256 balance = IERC20(rewardToken).balanceOf(address(this));
+    totalRewards += balance;
+    IRollingRewarder(rewarder).fund();
+}
+```

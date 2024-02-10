@@ -1,0 +1,255 @@
+---
+title: '#5 Solo Review: Options Token'
+date: '2024-01-13'
+tags: ['reports']
+draft: false
+summary: 'An Option Token gives the right to purchase the underlying token at a disconted price in the future.'
+---
+
+# Introduction
+
+A time-boxed security review of the an options Token protocol was done by [Beirao](https://www.beirao.xyz/about), with a focus on the security aspects of the application's smart contracts implementation.
+
+# Disclaimer
+
+A smart contract security review can never verify the complete absence of vulnerabilities. This is a time, resource and expertise bound effort where I try to find as many vulnerabilities as possible. I can not guarantee 100% security after the review or even if the review will find any problems with your smart contracts. Subsequent security reviews, bug bounty programs and on-chain monitoring are strongly recommended.
+
+# About Beirao
+
+I’m an independent smart contract security researcher. I extend my skills as a contractor specializing in EVM smart contracts security. If you're in need of robust code review, I'm here to help. We can get in touch via [Twitter](https://twitter.com/0xBeirao) or [Email](mailto:beirao.dev@icloud.com).
+
+# About Options Token
+
+An option token represents the right to purchase the underlying token at a price set by Oracle.
+
+## Observations
+
+The system looks secure by design:
+
+- by limiting concurrent interactions: there is only 1 possible external call for users (`exercise()`)
+- by limiting the number of tokens left in the system.
+- The system doesn't rely on `balanceOf()`.
+
+The main vulnerability is common to all TWAP implementations (Uniswap, Balancer and Thena). During the review I focused mainly on this area. Using these types of oracle is not ideal for [several reasons] (https://chainsecurity.com/oracle-manipulation-after-merge/), but we are forced to deal with it since there are no other solutions to get the price on small capitalization tokens. The team implemented a `minPrice` guard. In case of price manipulation, this guard will limit the impact.
+
+The admin has some power and many admin functions are error-prone. I would recommend improving input validation [L-03] for all admin functions to reduce the risk of errors.
+
+This system is deployed under a UUPS proxy using Open Zeppelin. The UUPS implementation looks fine. The team is using best practices by using the "upgrade" hardhat plugin which does security checks in the background. I recommend doing a mock upgrade + running tests on this upgrade (using the same plugin) just to be 100% sure the proxy is working perfectly.
+
+## Privileged Roles & Actors
+
+### OptionsToken
+
+User: `exercise()`
+
+Owner (multisig): `setExerciseContract()`, `initiateUpgradeCooldown()`, `clearUpgradeCooldown()`, `upgradeTo()`, `upgradeToAndCall()`
+
+tokenAdmin: mint()
+
+### TWAP oracles
+
+Owner: `setParams()`
+
+### Exercise
+
+Owner: `setFees()`, `setOracle()`, `setMultiplier()`
+
+optionsToken: `exercise()`
+
+# Severity classification
+
+| Severity           | Impact: High | Impact: Medium | Impact: Low |
+| ------------------ | ------------ | -------------- | ----------- |
+| Likelihood: High   | High         | High           | Medium      |
+| Likelihood: Medium | High         | Medium         | Low         |
+| Likelihood: Low    | Medium       | Low            | Low         |
+
+**Impact** - the technical, economic and reputation damage of a successful attack
+
+**Likelihood** - the chance that a particular vulnerability gets discovered and exploited
+
+**Severity** - the overall criticality of the risk
+
+# Security Assessment Summary
+
+**_review commit hash_ -** [4ebc890c](https://github.com/Byte-Masons/options-token/commit/4ebc890c26b3fd6a4fae5bbdf20d4e690d2533db)
+
+**_fixes review commit hash_ -** [9aa8a91e](https://github.com/Byte-Masons/options-token/commit/9aa8a91e6788ada2354682e43e781e1c691af574)
+
+### Deployment chains
+
+- BSC
+- Optimism
+- Ethereum Mainnet
+
+### Scope
+
+The following smart contracts were in scope of the audit: (total : **421** SLoC)
+
+- `OptionsToken.sol`
+- `exercise/DiscountExercise.sol`
+- `exercise/BaseExercise.sol`
+- `oracles/UniswapV3Oracle.sol`
+- `oracles/BalancerOracle.sol`
+- `oracles/ThenaOracle.sol`
+
+---
+
+# Findings Summary
+
+Summary :
+
+- 2 Mediums
+- 3 Lows
+
+| ID     | Title                                                                     | Status |
+| ------ | ------------------------------------------------------------------------- | ------ |
+| [M-01] | exercise() possible DOS                                                   | Fix    |
+| [M-02] | distributeFeesFrom() and distributeFees() don’t distribute fees correctly | Fix    |
+| [L-01] | Lack of transparency in the implementation contract prior to an upgrade   | Fix    |
+| [L-02] | getPaymentAmount() does not return the right payment amount               | Fix    |
+| [L-03] | Lack of security checks on constructors                                   | Fix    |
+
+# Detailed Findings
+
+# [M-01] `exercise()` possible DOS
+
+[DiscountExercise.sol#L141](https://github.com/Byte-Masons/options-token/blob/4ebc890c26b3fd6a4fae5bbdf20d4e690d2533db/src/exercise/DiscountExercise.sol#L141)
+
+## Description
+
+The documentation says: "We limit the amount of funds we leave in an exercise contract at any given time to limit risk. But if the contract is not funded, calling `exercise()` will revert, causing the user to not get their token when they expected. Since a user may want to time his exercise price, not being able to claim his due is not fair.
+
+## Recommendations
+
+If the contract is underfunded, I suggest storing the unclaimed `underlyingToken` in a variable to allow the user to claim his tokens later.
+
+This can be done by
+
+- checking if the underlying contract token balance is sufficient
+- then storing the unclaimed tokens in a mapping
+- and allowing the user to claim their token afterwards by adding a `claim()` function.
+
+# [M-02] `distributeFeesFrom()` and `distributeFees()` don’t distribute fees correctly
+
+[BaseExercise.sol#L66-L86](https://github.com/Byte-Masons/options-token/blob/4ebc890c26b3fd6a4fae5bbdf20d4e690d2533db/src/exercise/BaseExercise.sol#L66-L86)
+
+## Description
+
+The `BaseExercise` does not distribute fees correctly. In the `distributeFeesFrom()` and `distributeFees()` function the `totalAmount` is updated at each loop, making the next fee inaccurate.
+
+Let’s say we want to distribute 1000 USDC to 4 recipients equally (25% each one).
+
+- 1st recipient will receive 1000 \* 25 / 100 = **250 USDC**
+- 2nd recipient will receive 750 \* 25 / 100 = **187,5 USDC**
+- 3rd recipient will receive 562,5 \* 25 / 100 = **140,6 USDC**
+- 4th recipient will receive **422 USDC**
+
+Everyone should have received **250 USDC** but \*\*\*\*that’s not the case here.
+
+```jsx
+function distributeFeesFrom(uint256 totalAmount, IERC20 token, address from) internal virtual {
+    for (uint256 i = 0; i < feeRecipients.length - 1; i++) {
+        uint256 feeAmount = totalAmount * feeBPS[i] / FEE_DENOMINATOR;
+        token.safeTransferFrom(from, feeRecipients[i], feeAmount);
+        totalAmount -= feeAmount;
+    }
+    token.safeTransferFrom(from, feeRecipients[feeRecipients.length - 1], totalAmount);
+    emit DistributeFees(feeRecipients, feeBPS, totalAmount);
+}
+```
+
+## Recommendations
+
+You need to cache the totalAmount at startup and use it to calculate the fee:
+
+```jsx
+function distributeFeesFrom(uint256 totalAmount, IERC20 token, address from) internal virtual {
++   uint256 totalAmountStart = totalAmount;
+		for (uint256 i = 0; i < feeRecipients.length - 1; i++) {
++       uint256 feeAmount = totalAmountStart * feeBPS[i] / FEE_DENOMINATOR;
+        token.safeTransferFrom(from, feeRecipients[i], feeAmount);
+        totalAmount -= feeAmount;
+    }
+    token.safeTransferFrom(from, feeRecipients[feeRecipients.length - 1], totalAmount);
+    emit DistributeFees(feeRecipients, feeBPS, totalAmount);
+}
+```
+
+`distributeFees()` is never used. Don't forget to patch this function if you decide to keep it.
+
+# [L-01] Lack of transparency in the implementation contract prior to an upgrade
+
+[OptionsToken.sol#L161-L163](https://github.com/Byte-Masons/options-token/blob/4ebc890c26b3fd6a4fae5bbdf20d4e690d2533db/src/OptionsToken.sol#L161-L163)
+
+## Description
+
+Usually when there is a cooldown mechanism before an upgrade, it's to give the user time to review the upgrade and decide if they want to stay or leave the project.
+
+Here, the `initiateUpgradeCooldown()` function does not ask for the next implementation, which means that users can't review the next implementation.
+
+## Recommendations
+
+Create a new variable `nextImplementation`
+
+Modify `initiateUpgradeCooldown()` like this:
+
+```solidity
+function initiateUpgradeCooldown(address _nextImplementation) external onlyOwner {
+        upgradeProposalTime = block.timestamp;
+				nextImplementation = _nextImplementation;
+}
+```
+
+And `_authorizeUpgrade()` like this:
+
+```solidity
+function _authorizeUpgrade(address _nextImplementation) internal override onlyOwner {
+				require(nextImplementation == _nextImplementation, "Not the right implementation");
+        require(upgradeProposalTime + UPGRADE_TIMELOCK < block.timestamp, "Upgrade cooldown not initiated or still ongoing");  // check the cooldown
+        _clearUpgradeCooldown();
+}
+```
+
+# [L-02] `getPaymentAmount()` does not return the right payment amount
+
+[DiscountExercise.sol#L150-L152](https://github.com/Byte-Masons/options-token/blob/4ebc890c26b3fd6a4fae5bbdf20d4e690d2533db/src/exercise/DiscountExercise.sol#L150-L152)
+
+## Description
+
+`getPaymentAmount()` does not take the multiplier into account.
+
+Rated as low because this can be misleading if the user/frontend relies on this function to set params.maxPaymentAmount.
+
+## Recommendations
+
+```jsx
+function getPaymentAmount(uint256 amount) external view returns (uint256 paymentAmount) {
+    paymentAmount = amount.mulWadUp(oracle.getPrice().mulDivUp(multiplier, MULTIPLIER_DENOM));
+}
+```
+
+# [L-03] Lack of security checks on **constructors**
+
+`Oracles` and `Exercise` contracts must be perfectly compatible. I recommend adding these checks to make sure there are no incompatibilities:
+
+### In oracles contracts:
+
+- add 18 decimal check for each tokens (`token0` and `token1`)
+- make sure `token` is either `token0` or `token1`
+- add a minimum time interval check for `secs` (also add this check in `setParams()`)
+
+### In Exercise contract:
+
+- add 18 decimal checks for each tokens (`paymentToken_` and `underlyingToken_`)
+- Check that the sum of `_feeBPS` equals `FEE_DENOMINATOR` (also add this check in `setFees()`)
+- add bound check for multiplier in constructor (just like like in `setMultiplier()`)
+
+```jsx
+if (
+		  multiplier_ > MULTIPLIER_DENOM * 2 // over 200%
+      || multiplier_ < MULTIPLIER_DENOM / 10 // under 10%
+	  ) revert Exercise__MultiplierOutOfRange(); // check range
+```
+
+- check that `paymentToken_` and `underlyingToken_` are compatible with the oracle (also add this check in `setOracle()`)
