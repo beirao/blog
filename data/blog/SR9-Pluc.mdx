@@ -1,0 +1,155 @@
+---
+title: '#9 Solo Review: Pluc'
+date: '2024-03-31'
+tags: ['reports']
+draft: false
+summary: 'Pluc is a stablecoin forked from Ethos V2.'
+---
+
+# Introduction
+
+A time-boxed security review of the Pluc protocol was done by [Beirao](https://www.beirao.xyz/about), with a focus on the security aspects of the application's smart contracts implementation.
+
+# Disclaimer
+
+A smart contract security review can never verify the complete absence of vulnerabilities. This is a time, resource and expertise bound effort where I try to find as many vulnerabilities as possible. I can not guarantee 100% security after the review or even if the review will find any problems with your smart contracts. Subsequent security reviews, bug bounty programs and on-chain monitoring are strongly recommended.
+
+# About Beirao
+
+I’m an independent smart contract security researcher. I extend my skills as a contractor specializing in EVM smart contracts security. If you're in need of robust code review, I'm here to help. We can get in touch via [Twitter](https://twitter.com/0xBeirao) or [Email](mailto:beirao.dev@icloud.com).
+
+# About Pluc
+
+Pluc is a stable coin that uses RWA as collateral. It is an Ethos fork, which is itself a Liquity fork.
+
+![Img about](/static/images/blog-img/SR9-1.png)
+
+## Observations
+
+This audit focuses on changes between the Pluc audit commit and Ethos V2.1.
+
+![Img Observations](/static/images/blog-img/SR9-2.png)
+
+Mofications :
+
+- `ActivePool.sol` - Remove rehypothecation
+- `PriceFeed.sol` -
+- `RewarderManager.sol` - New hook system.
+- `TroveManager.sol` - Add of all hook calls.
+
+## Privileged Roles & Actors
+
+# Severity classification
+
+| Severity           | Impact: High | Impact: Medium | Impact: Low |
+| ------------------ | ------------ | -------------- | ----------- |
+| Likelihood: High   | High         | High           | Medium      |
+| Likelihood: Medium | High         | Medium         | Low         |
+| Likelihood: Low    | Medium       | Low            | Low         |
+
+**Impact** - the technical, economic and reputation damage of a successful attack
+
+**Likelihood** - the chance that a particular vulnerability gets discovered and exploited
+
+**Severity** - the overall criticality of the risk
+
+# Security Assessment Summary
+
+**_review commit hash_**
+
+- [Pluc Stablecoin](https://github.com/Byte-Masons/pluc-stablecoin/commit/92ff3554c096cf33712903bbcc6ddefb3e526ab8) (92ff3554)
+- [Vault V2](https://github.com/Byte-Masons/vault-v2/commit/29b8b3f2631f1b06f7ac99981abcd21aa1125984) (29b8b3f2)
+- [Pluc Vault](https://github.com/Byte-Masons/pluc-vault/commit/49f610c7f9c2f91318d79bf4980c55a75be354d1) (49f610c7)
+
+### Deployment chains
+
+- Polygon zkEVM
+
+### Scope
+
+The following smart contracts were in scope of the audit: (total : xxx SLoC)
+
+[Pluc Stablecoin](https://github.com/Byte-Masons/pluc-stablecoin/commit/92ff3554c096cf33712903bbcc6ddefb3e526ab8) (92ff3554)
+
+- `ActivePool.sol`
+- `PriceFeed.sol`
+- `RewarderManager.sol`
+- `TroveManager.sol`
+
+[Vault V2](https://github.com/Byte-Masons/vault-v2/commit/29b8b3f2631f1b06f7ac99981abcd21aa1125984) (29b8b3f2)
+
+- `ReaperVaultERC4626.sol`
+- `ReaperVaultV2.sol`
+
+[Pluc Vault](https://github.com/Byte-Masons/pluc-vault/commit/49f610c7f9c2f91318d79bf4980c55a75be354d1) (49f610c7)
+
+- `IdleStrategy.sol`
+- `Vault.sol`
+
+---
+
+# Findings Summary
+
+Summary :
+
+- 2 Highs
+- 1 Medium
+- 3 Improvements
+
+| ID     | Title                                                                                      | Status |
+| ------ | ------------------------------------------------------------------------------------------ | ------ |
+| [H-01] | Incompatibility between Chronicle Price Feed Adapter and Current PriceFeed Implementation  | -      |
+| [H-02] | Absence of Borrowing Interest Rate Leads to Stablecoin Depegging and Excessive Redemptions | -      |
+| [M-01] | Hooks Make The System Vulnerable To Reentrancy Attacks.                                    | -      |
+
+# Improvements
+
+- You can remove all `pragma experimental ABIEncoderV2;` in ^0.8.0
+- Remove `safeMath` and replace it with raw operations.
+- Hooks don't know what the underlying operation is. For example, `onDebtDecrease` doesn't know if the decrease in debt is caused by a liquidation, a redemption, or just a trove adjustment by the user. If you think the rewarders might need this feature, you can add a variable that specifies the operation performed.
+
+# Detailed Findings
+
+# [H-01] Incompatibility between Chronicle Price Feed Adapter and Current PriceFeed Implementation
+
+## Description
+
+The plan is to utilize Chronicle as the primary oracle in the pluc stablecoin system. Given that the initial Liquity design employs Chainlink, an adapter was proposed ([here](https://zkevm.polygonscan.com/address/0x24C392CDbF32Cf911B258981a66d5541d85269ce#code%23F5%23L109)). However, the main issue is that this adapter does not handle the roundId, which is essential for the current `PriceFeed` contract.
+
+Upon examination of the adapter, it appears that the roundId is hardcoded to 1. Furthermore, the adapter does not implement the getRoundData() function. This function is crucial in the PriceFeed contract for obtaining the previous Chainlink response in \_getPrevChainlinkResponse().
+
+This basically results in a DOS of the price feed since \_getPrevChainlinkResponse() will not work.
+
+## Recommendations
+
+Therefore, it seems necessary to modify the price feed logic to some extent. Considering the current implementation, it would be advisable to update the logic and adapt it to the Chronicle implementation.
+
+# [H-02] Absence of Borrowing Interest Rate Leads to Stablecoin Depegging and Excessive Redemptions
+
+## Description
+
+The current design of the stablecoin system does not incorporate a borrowing interest rate, which can lead to depegging and excessive redemptions under certain market conditions. As discussed, setting the management fee to 0% would not necessarily cause the plUSD to depeg due to redemptions, but it would likely result in a high volume of redemptions.
+
+In the current high-yield market, users are incentivized to borrow plUSD at 0% interest and invest in high-yield products like sDAI. This results in constant selling pressure on plUSD, leading to frequent redemptions. To avoid redemptions, users currently need to maintain a high collateralization ratio , which is suboptimal.
+
+## Recommendations
+
+To mitigate this issue, it is recommended to introduce a borrowing interest rate. There are three potential solutions for implementing this:
+
+1. Governance-decided rate: Similar to Maker, the governance could decide on the interest rate.
+2. PID controller: A PID (Proportional-Integral-Derivative) controller could be used to dynamically adjust the interest rate based on market conditions.
+3. Liquity v2 solution: Users could be allowed to decide the borrowing rate, and redemptions could be based on this borrowing rate instead of the collateral ratio.
+
+By implementing one of these solutions, the stablecoin system could reduce the risk of depegging and excessive redemptions, while also improving the overall efficiency of the system.
+
+# [M-01] Hooks Make The System Vulnerable To Reentrancy Attacks.
+
+## Description
+
+The new hook mechanism disrupts the check-effect-interaction pattern, introducing a vulnerability. If a rewarder implementation reenters the main system, it can lead to unexpected behaviors.
+
+The threat may come from the admin, who might be unaware of the reentrancy risks, or from a compromised key. This vulnerability falls under the category of "centralization risk".
+
+## Recommendations
+
+To mitigate this risk, it is recommended to implement a reentrancy guard on all external functions. This would prevent a function from being called again before it has completed its execution.
