@@ -1,24 +1,24 @@
 ---
 name: Beirao
-avatar: /static/images/pp2.png
-occupation: Smart Contracts Security Researcher
+avatar: /static/images/pp3.png
+occupation: Smart Contracts SR and developer
 
-company: Independent
+company: Head of Security | Conclave
 email: beirao.dev@icloud.com
 twitter: https://twitter.com/0xBeirao
 github: https://github.com/beirao
 ---
 
-Hey there, I'm Beirao!
+Hi, I'm Beirao.
 
-I'm just a guy diving headfirst into the smart contract security and WEB3.
+I am a former independent security researcher, where I specialized in [private audits](/tags/reports), [security contests](https://code4rena.com/@0xBeirao), and bug bounties. Now, I lead security initiatives as Head of Security at [Conclave](https://conclave.io/).
 
-I've got an engineering degree under my belt, and I'm currently working as an independent security researcher.
+At Conclave, I oversee the development of the innovative **Cod3x DeFi stack**, ensuring our platform meets the industry's highest security standards.
 
-I started learning full development with Patrick Collins in mid-2022, and went deeper into security research early 2023.
+My key development contributions include:
 
-I'm constantly learning to make WEB3 a safer place! My mission is to audit and secure smart contracts, keeping them safe from hacks.
+- [**Reliquary V2**](https://github.com/Cod3x-Labs/Reliquary)
+- [**Cod3x Lend**](https://github.com/Cod3x-Labs/Cod3x-Lend)
+- [**Cod3x USD**](https://github.com/Cod3x-Labs/Cod3x-USD)
 
-I'm ranked #36 (2023) on [Code4rena](https://code4rena.com/leaderboard) and have won some rewards on [Immunefi](https://immunefi.com).
-
-As a result, companies have approached me to audit their smart contracts.
+Every day, I'm committed to learning and innovating to make WEB3 a safer place.

@@ -1,6 +1,6 @@
 const siteMetadata = {
   title: "Beirao's Hub",
-  author: 'beirao.eth',
+  author: 'beirao',
   headerTitle: "Beirao's Hub",
   description: 'Check out my content on smart contracts security and development here.',
   language: 'en-us',
