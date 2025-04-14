@@ -24,7 +24,8 @@ The Balancer V3 Geomean Oracle is a robust price oracle solution designed specif
 - **Manipulation Resistance**:
   - Inherently protected against single-block manipulation via geometric mean calculation.
   - **Manipulation Safe Guard**: Implements a maximum price change limit of 10% per block. This relies on the assumption that larger changes are likely manipulation or highly inefficient swaps.
-  - **Worst-Case Scenario**: Even if an attacker controls 16 consecutive blocks on Ethereum mainnet (an extremely unlikely event), the maximum price deviation is calculated to be 8.5% over a 1-hour observation period.
+  - **Common manipulation scenario**: With control over 6 consecutive blocks on Ethereum mainnet, an attacker can only achieve a maximum price deviation of 0.46% over a 1-hour observation period, significantly limiting manipulation potential.
+  - **Worst-Case Scenario**: Even if an attacker controls 16 consecutive blocks on Ethereum mainnet (an extremely unlikely event), the maximum price deviation is calculated to be 3.10% over a 1-hour observation period.
 - **Flexibility**:
   - Fully customizable observation period (up to 30 days).
   - Ability to create multiple Chainlink adaptors from a single oracle hook contract.
@@ -93,7 +94,8 @@ The specific form of the partial derivative for a token $x$ in a Stable Pool is:
 
 $$
 \begin{align}
-\frac{\partial f}{\partial x} = A + \frac{D^{(n+1)}}{n^n \cdot x \cdot P} = A + \frac{1}{x} \cdot (A \cdot S + D - A \cdot D)
+\frac{\partial f}{\partial x} &= A + \frac{D^{(n+1)}}{n^n \cdot x \cdot P} \\
+&= A + \frac{1}{x} \cdot (A \cdot S + D - A \cdot D)
 \end{align}
 $$
 
@@ -106,6 +108,31 @@ Where:
 - $n$ is the number of tokens in the pool.
 
 This spot price is then used as the $price_i$ input for the geometric mean calculation.
+
+### BPT price calculation
+
+The Balancer Pool Token (BPT) price represents the value of one BPT share in terms of the reference token. It is calculated by summing the value of all underlying tokens in the pool and dividing by the total supply of BPT:
+
+$$
+\begin{align}
+\text{BPT Price} = \frac{\sum_{i} (b_i \cdot p_i)}{T}
+\end{align}
+$$
+
+Where:
+
+- $b_i$ is the balance of token $i$ in the pool (in WAD)
+- $p_i$ is the price of token $i$ in terms of the reference token
+- $T$ is the total supply of BPT tokens
+
+This calculation is performed in the `_getLastPrice` function when the input token is the pool's BPT address. The function:
+
+1. Retrieves all pool tokens and their balances
+2. For each token, calculates its value in terms of the reference token
+3. Sums up all token values to get the total pool value
+4. Divides the total value by the BPT total supply to get the price per BPT
+
+The resulting BPT price is then used as input for the geometric mean calculation, just like any other token price in the pool.
 
 ## How does it work
 
