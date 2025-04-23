@@ -1,0 +1,793 @@
+---
+title: '#12 Solo Review: Cod3x Lend Fuzzing campaign'
+date: '2024-12-01'
+tags: ['reports']
+draft: false
+summary: 'This report is a fuzzing campaign on the Cod3x Lend protocol.'
+---
+
+# Introduction
+
+A time-boxed security review of the Granary V2 protocol was done by [Beirao](https://www.beirao.xyz/about), with a focus on the security aspects of the application's smart contracts implementation.
+
+# Disclaimer
+
+A smart contract security review can never verify the complete absence of vulnerabilities. This is a time, resource and expertise bound effort where I try to find as many vulnerabilities as possible. I can not guarantee 100% security after the review or even if the review will find any problems with your smart contracts. Subsequent security reviews, bug bounty programs and on-chain monitoring are strongly recommended.
+
+# About Beirao
+
+I’m an independent smart contract security researcher. I extend my skills as a contractor specializing in EVM smart contracts security. If you're in need of robust code review, I'm here to help. We can get in touch via [Twitter](https://twitter.com/0xBeirao) or [Email](mailto:beirao.dev@icloud.com).
+
+# About Cod3x Lend
+
+The purpose of this audit is to highlight high level errors due to the new rehypothecation and minipool mechanism. This is not a line-by-line review, so some hidden errors may remain.
+
+## Observations
+
+Cod3x lend is a AAVE V2 fork that adds:
+
+- Updated pragmas (^0.8.0)
+- Lending pool external rehypothecation
+- The concept of minipools. Minipools are sub-markets that have a privileged borrowing capacity on the main lending pool.
+
+### Scope
+
+The following smart contracts were in scope of the audit: (total : **8056** SLoC)
+
+- `contracts/protocol/**`
+
+# Severity classification
+
+| _Severity_             | **Impact: High** | **Impact: Medium** | **Impact: Low** |
+| ---------------------- | ---------------- | ------------------ | --------------- |
+| **Likelihood: High**   | Critical         | High               | Medium          |
+| **Likelihood: Medium** | High             | Medium             | Low             |
+| **Likelihood: Low**    | Medium           | Low                | Low             |
+
+**Impact** - the technical, economic and reputation damage of a successful attack
+
+**Likelihood** - the chance that a particular vulnerability gets discovered and exploited
+
+**Severity** - the overall criticality of the risk
+
+# Security Assessment Summary
+
+**_review commit hash_ -** [bb2a3c08](https://github.com/Cod3x-Labs/Cod3x-Lend/commit/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9)
+
+**_fixes review commit hash_ -** [b984420c](https://github.com/Cod3x-Labs/Cod3x-Lend/commit/b984420c1dd810ee04df8f5539209d3a147e4417)
+
+### Deployment chains
+
+- All EVMs.
+
+### Scope
+
+The following smart contracts were in scope of the audit: (total : **8056** SLoC)
+
+- `contracts/protocol/**`
+
+---
+
+# Findings Summary
+
+Summary :
+
+- **2** High(s)
+- **3** Medium(s)
+
+| ID   | Title                                                                      | Status |
+| ---- | -------------------------------------------------------------------------- | ------ |
+| H-01 | `AToken6909.totalSupply()` doesn’t return the correct answer if debtToken. | Fix    |
+| H-02 | Rebalance rehypothecation DOS                                              | Fix    |
+| M-01 | Rounding issue in `ValidationLogic.validateWithdraw()`                     | Fix    |
+| M-02 | Rounding issue in `ValidationLogic.validateBorrow()`                       | Fix    |
+| M-03 | `userConfig` inconsistency                                                 | Fix    |
+
+---
+
+## Properties
+
+```markdown
+✅ : Passing
+❌ : Failing
+
+### General (same for the LendingPool and MiniPools)
+
+100. ✅ To be liquidated on a given collateral asset, the target user must own the associated `aTokenColl`.
+101. ✅ To be liquidated on a given token, the target user must own the associated `vTokenDebt`.
+102. ✅ `liquidationCall()` must only be callable when the target health factor is < 1.
+103. ✅ `liquidationCall()` must decrease the target `vTokenDebt` balance by `amount`.
+104. ✅ `liquidationCall()` must increase the liquidator `aTokenColl` (or `collAsset`) balance.
+105. ✅ `liquidationCall()` must decrease the liquidator debt asset balance if `randReceiveAToken` is true or `collAsset` is not equal to `debtAsset`.
+106. ✅ `setFlowLimit()` must correctly decrease the flow.
+
+### LendingPool
+
+200. ✅ Users must always be able to deposit in normal condition.
+201. ✅ `deposit()` must increase the user aToken balance by `amount`.
+202. ✅ `deposit()` must decrease the user asset balance by `amount`.
+203. ✅ `withdraw()` must decrease the user aToken balance by `amount`.
+204. ✅ `withdraw()` must increase the user asset balance by `amount`.
+205. ✅ A user must not be able to `borrow()` if they don't own aTokens.
+206. ✅ `borrow()` must only be possible if the user health factor is greater than 1.
+207. ❌ `borrow()` must not result in a health factor of less than 1.
+208. ✅ `borrow()` must increase the user debtToken balance by `amount`.
+209. ✅ `borrow()` must decrease `borrowAllowance()` by `amount` if `user != onBehalf`.
+210. ✅ `repay()` must decrease the onBehalfOf debtToken balance by `amount`.
+211. ✅ `repay()` must decrease the user asset balance by `amount`.
+212. ✅ `healthFactorAfter` must be greater than `healthFactorBefore` as long as liquidations are done in time.
+213. ✅ `setUseReserveAsCollateral` must not reduce the health factor below 1.
+214. ✅ Users must not be able to steal funds from flashloans.
+215. ✅ The total value borrowed must always be less than the value of the collaterals.
+216. ✅ The `liquidityIndex` should monotonically increase when there is collateral.
+217. ✅ The `variableBorrowIndex` should monotonically increase when there is debt.
+218. ✅ A user with debt should have at least an aToken balance `setUsingAsCollateral`.
+219. ✅ Integrity of Deposit Cap - aToken supply should never exceed the cap.
+220. ✅ `UserConfigurationMap` integrity: If a user has a given aToken then `isUsingAsCollateralOrBorrowing` and `isUsingAsCollateral` should return true.
+221. ✅ `UserConfigurationMap` integrity: If a user has a given debtToken then `isUsingAsCollateralOrBorrowing`, `isBorrowing` and `isBorrowingAny` should return true.
+222. ✅ Rehypothecation: farming percentage must be respected (+/- the drift) after a rebalance occured.
+223. ✅ Rehypothecation: The profit handler address must see its balance increase after reaching the claiming threshold.
+224. ✅ `withdraw()` must not result in a health factor of less than 1.
+225. ❌ Rehypothecation: farming percentage must be respected (+/- the drift) after any operation.
+
+### ATokens/ATokenNonRebasing
+
+300. ✅ Zero amount transfers should not break accounting.
+301. ✅ Once a user has a debt, they must not be able to transfer aTokens if this results in a health factor less than 1.
+302. ✅ Transfers for more than available balance should not be allowed.
+303. ✅ Transfers should update accounting correctly.
+304. ✅ Self transfers should not break accounting.
+305. ✅ Zero amount transfers must not break accounting.
+306. ✅ Once a user has a debt, they must not be able to transfer aTokens if this results in a health factor less than 1.
+307. ✅ Transfers for more than available balance must not be allowed.
+308. ✅ `transferFrom()` must only transfer if the sender has enough allowance from the `from` address.
+309. ✅ Transfers must update accounting correctly.
+310. ✅ Self transfers must not break accounting.
+311. ✅ `transferFrom()` must decrease allowance.
+312. ✅ `approve()` must never revert.
+313. ✅ Allowance must be modified correctly via `approve()`.
+314. ✅ `increaseAllowance()` must never revert.
+315. ✅ Allowance must be modified correctly via `increaseAllowance()`.
+316. ✅ `decreaseAllowance()` must revert when the user tries to decrease more than currently allowed.
+317. ✅ Allowance must be modified correctly via `decreaseAllowance()`.
+318. ✅ Force feeding assets in LendingPool, ATokens, debtTokens, MiniPools or AToken6909 must not change the final result.
+319. ✅ Force feeding aToken in LendingPool, ATokens, debtTokens, MiniPools or AToken6909 must not change the final result.
+320. ✅ A user must not hold more than total supply.
+321. ✅ Sum of users' balances must not exceed total supply.
+322. ✅ `ATokenNonRebasing` `balanceOf()` should be equivalent to `ATokens` adjusted to the conversion rate.
+323. ✅ `ATokenNonRebasing` `transfer()` should be equivalent to `ATokens` adjusted to the conversion rate.
+324. ❌ `ATokenNonRebasing` `transferFrom()` should be equivalent to `ATokens` adjusted to the conversion rate.
+325. ✅ Allowance must be modified correctly via `ATokenNonRebasing.approve()`.
+326. ✅ `ATokenNonRebasing.approve()` must not modify `AToken.allowance()`.
+
+### DebtTokens
+
+400. ✅ `approveDelegation()` must never revert.
+401. ✅ Allowance must be modified correctly via `approve()`.
+
+### MiniPool
+
+500. ✅ Users must always be able to deposit in normal condition.
+501. ✅ `deposit()` must increase the user AToken6909 balance by `amount`.
+502. ✅ `deposit()` must decrease the user asset balance by `amount`.
+503. ✅ `withdraw()` must decrease the user AToken6909 balance by `amount`.
+504. ✅ `withdraw()` must increase the user asset balance by `amount`.
+505. ❌ `withdraw()` must not result in a health factor of less than 1.
+506. ✅ A user must not be able to `borrow()` if they don't own AToken6909.
+507. ✅ `borrow()` must only be possible if the user health factor is greater than 1.
+508. ❌ `borrow()` must not result in a health factor of less than 1.
+509. ✅ `borrow()` must increase the user debtToken balance by `amount` when flow borrowing is disabled.
+510. ✅ `borrow()` must decrease `borrowAllowance()` by `amount` if `user != onBehalf`.
+511. ✅ `repay()` must decrease the onBehalfOf debtToken balance by `amount`.
+512. ✅ `repay()` must decrease the user asset balance by `amount`.
+513. ✅ `healthFactorAfter` must be greater than `healthFactorBefore` as long as liquidations are done in time.
+514. ✅ `setUseReserveAsCollateral` must not reduce the health factor below 1.
+515. ✅ Users must not be able to steal funds from flashloans.
+516. ✅ The total value borrowed must always be less than the value of the collateral when flow borrowing is disabled.
+517. ✅ The `liquidityIndex` should monotonically increase when there is collateral.
+518. ✅ The `variableBorrowIndex` should monotonically increase when there is debt.
+519. ✅ A user with debt should have at least an AToken6909 balance `setUsingAsCollateral`.
+520. ✅ Integrity of Deposit Cap - aToken supply should never exceed the cap.
+521. ❌ `UserConfigurationMap` integrity: If a user has a given aToken then `isUsingAsCollateralOrBorrowing` and `isUsingAsCollateral` should return true.
+522. ✅ `UserConfigurationMap` integrity: If a user has a given debtToken then `isUsingAsCollateralOrBorrowing`, `isBorrowing` and `isBorrowingAny` should return true.
+523. ✅ If a minipool is flow borrowing, for a given reserve, the Lendingpool liquidity interest rate remain lower than the minipool debt interest rate.
+524. ✅ The aToken remainder of each assets with flow borrowing activated should remain greater than ERROR_REMAINDER_MARGIN.
+525. ✅ If a minipool is flow borrowing then its address must be included in `LendingPool._minipoolFlowBorrowing`.
+526. ✅ If a minipool is not flow borrowing then its address must not be included in `LendingPool._minipoolFlowBorrowing`.
+
+### AToken6909
+
+600. ✅ Zero amount transfers should not break accounting.
+601. ✅ Once a user has a debt, they must not be able to transfer aTokens if this results in a health factor less than 1.
+602. ✅ Transfers for more than available balance should not be allowed.
+603. ✅ Transfers should update accounting correctly.
+604. ✅ Self transfers should not break accounting.
+605. ✅ Zero amount transfers must not break accounting.
+606. ✅ Once a user has a debt, they must not be able to transfer AToken6909s if this results in a health factor less than 1.
+607. ✅ Transfers for more than available balance must not be allowed.
+608. ✅ `transferFrom()` must only transfer if the sender has enough allowance from the `from` address.
+609. ✅ Transfers must update accounting correctly.
+610. ✅ Self transfers must not break accounting.
+611. ✅ `transferFrom()` must decrease allowance.
+612. ✅ `approve()` must never revert.
+613. ✅ Allowance must be modified correctly via `approve()`.
+614. ✅ Force feeding AToken6909 in MiniPools or AToken6909 must not change the final result.
+615. ✅ `approveDelegation()` must never revert.
+616. ✅ Allowance must be modified correctly via `approve()`.
+617. ❌ A user must not hold more than total supply.
+618. ✅ Sum of users' balances must not exceed total supply.
+```
+
+## Entry points
+
+```markdown
+## Admin entry points
+
+### LendingPoolAddressesProvider
+
+- `setAddressAsProxy(bytes32 id, address implementationAddress)`
+  - `setLendingPoolImpl(address pool)`
+  - `setLendingPoolConfiguratorImpl(address configurator)`
+- `setAddress(bytes32 id, address newAddress)`
+  - `setPoolAdmin(address admin)`
+  - `setPriceOracle(address priceOracle)`
+  - `setMiniPoolAddressesProvider(address provider)`
+  - `setFlowLimiter(address flowLimiter)`
+  - `setEmergencyAdmin(address emergencyAdmin)`
+  - `setPoolAdmin(address admin)`
+
+### LendingPoolConfigurator
+
+- `batchInitReserve(InitReserveInput[] calldata input)`
+- `updateAToken(UpdateATokenInput calldata input)`
+- `updateVariableDebtToken(UpdateDebtTokenInput calldata input)`
+- `enableBorrowingOnReserve(address asset, bool reserveType)`
+- `disableBorrowingOnReserve(address asset, bool reserveType)`
+- `configureReserveAsCollateral(address asset, bool reserveType, uint256 ltv, uint256 liquidationThreshold, uint256 liquidationBonus)`
+- `activateReserve(address asset, bool reserveType)`
+- `deactivateReserve(address asset, bool reserveType)`
+- `freezeReserve(address asset, bool reserveType)`
+- `unfreezeReserve(address asset, bool reserveType)`
+- `setCod3xReserveFactor(address asset, bool reserveType, uint256 reserveFactor)`
+- `setDepositCap(address asset, bool reserveType, uint256 depositCap)`
+- `setReserveInterestRateStrategyAddress(address asset, bool reserveType, address rateStrategyAddress)`
+- `setPoolPause(bool val)`
+- `setFarmingPct(address aTokenAddress, uint256 farmingPct)`
+- `setClaimingThreshold(address aTokenAddress, uint256 claimingThreshold)`
+- `setFarmingPctDrift(address aTokenAddress, uint256 _farmingPctDrift)`
+- `setProfitHandler(address aTokenAddress, address _profitHandler)`
+- `setVault(address aTokenAddress, address _vault)`
+- `rebalance(address aTokenAddress)`
+- `setRewarderForReserve(address asset, bool reserveType, address rewarder)`
+- `setTreasury(address asset, bool reserveType, address rewarder)`
+- `updateFlashloanPremiumTotal(uint128 newFlashloanPremiumTotal)`
+- `enableFlashloan(address asset, bool reserveType)`
+- `disableFlashloan(address asset, bool reserveType)`
+
+### MiniPoolAddressProvider
+
+- `deployMiniPool(address miniPoolImpl, address aTokenImpl)`
+- `setFlowLimit(address asset, address miniPool, uint256 limit)`
+- `setMiniPoolImpl(address impl, uint256 miniPoolId)`
+- `setAToken6909Impl(address impl, uint256 miniPoolId)`
+- `setAddress(bytes32 id, address newAddress)`
+- `setMiniPoolConfigurator(address configuratorImpl)`
+- `setCod3xTreasury(uint256 id, address treasury)`
+
+### MiniPoolConfiguration
+
+- `batchInitReserve(InitReserveInput[] calldata input, IMiniPool pool)`
+- `enableBorrowingOnReserve(address asset, IMiniPool pool)`
+- `disableBorrowingOnReserve(address asset, IMiniPool pool)`
+- `configureReserveAsCollateral(address asset, uint256 ltv, uint256 liquidationThreshold, uint256 liquidationBonus, IMiniPool pool)`
+- `activateReserve(address asset, IMiniPool pool)`
+- `deactivateReserve(address asset, IMiniPool pool)`
+- `freezeReserve(address asset, IMiniPool pool)`
+- `unfreezeReserve(address asset, IMiniPool pool)`
+- `enableFlashloan(address asset, IMiniPool pool)`
+- `disableFlashloan(address asset, IMiniPool pool)`
+- `setCod3xReserveFactor(address asset, uint256 reserveFactor, IMiniPool pool)`
+- `setMinipoolOwnerReserveFactor(address asset, uint256 reserveFactor, IMiniPool pool)`
+- `setDepositCap(address asset, uint256 depositCap, IMiniPool pool)`
+- `setReserveInterestRateStrategyAddress(address asset, address rateStrategyAddress, IMiniPool pool)`
+- `setPoolPause(bool val, IMiniPool pool)`
+- `setRewarderForReserve(address asset, address rewarder, IMiniPool pool)`
+- `updateFlashloanPremiumTotal(uint128 newFlashloanPremiumTotal, IMiniPool pool)`
+
+### Oracle
+
+- `setAssetSources(address[] calldata assets, address[] calldata sources, uint256[] calldata timeouts)`
+- `setFallbackOracle(address fallbackOracle)`
+
+### BasePiReserveRateStrategy
+
+- `setOptimalUtilizationRate(uint256 optimalUtilizationRate)`
+- `setMinControllerError(int256 minControllerError)`
+- `setPidValues(uint256 kp, uint256 ki, int256 maxITimeAmp)`
+
+## User entry points
+
+### LendingPool
+
+- `deposit(address asset, bool reserveType, uint256 amount, address onBehalfOf)`
+- `withdraw(address asset, bool reserveType, uint256 amount, address onBehalfOf)`
+- `borrow(address asset, bool reserveType, uint256 amount, address onBehalfOf)`
+- `repay(address asset, bool reserveType, uint256 amount, address onBehalfOf)`
+- `repayWithATokens(address asset, bool reserveType, uint256 amount)`
+- `setUserUseReserveAsCollateral(address asset, bool reserveType, bool useAsCollateral)`
+- `liquidationCall(address collateralAsset, bool collateralAssetType, address debtAsset, bool debtAssetType, address user, uint256 debtToCover, bool receiveAToken)`
+- `flashLoan(FlashLoanParams memory flashLoanParams, uint256[] calldata amounts, uint256[] calldata modes, bytes calldata params)`
+
+### AToken
+
+- `transfer(address recipient, uint256 amount)`
+- `transferFrom(address sender, address recipient, uint256 amount)`
+- `approve(address spender, uint256 amount)`
+- `increaseAllowance(address spender, uint256 addedValue)`
+- `decreaseAllowance(address spender, uint256 subtractedValue)`
+- `permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`
+
+### ATokenNonRebasing
+
+- `transfer(address recipient, uint256 amountShare)`
+- `transferFrom(address sender, address recipient, uint256 amountShare)`
+- `approve(address spender, uint256 amountShare)`
+- `increaseAllowance(address spender, uint256 addedValue)`
+- `decreaseAllowance(address spender, uint256 subtractedValue)`
+
+### VariableDebtToken
+
+- `approveDelegation(address delegatee, uint256 amount)`
+
+### Minipool
+
+- `deposit(address asset, bool wrap, uint256 amount, address onBehalfOf)`
+- `withdraw(address asset, bool unwrap, uint256 amount, address to)`
+- `borrow(address asset, bool unwrap, uint256 amount, address onBehalfOf)`
+- `repay(address asset,  bool wrap, uint256 amount, address onBehalfOf)`
+- `setUserUseReserveAsCollateral(address asset, bool useAsCollateral)`
+- `liquidationCall(address collateralAsset, address debtAsset, address user, uint256 debtToCover, bool receiveAToken)`
+- `flashLoan(FlashLoanParams memory flashLoanParams, uint256[] calldata amounts, uint256[] calldata modes, bytes calldata params)`
+
+### AToken6909
+
+- `transfer(address to, uint256 id, uint256 amount)`
+- `transferFrom(address from, address to, uint256 id, uint256 amount)`
+- `approve(address spender, uint256 id, uint256 amount)`
+- `setOperator(address operator, bool approved)`
+- `approveDelegation(address delegatee, uint256 id, uint256 amount)`
+```
+
+---
+
+# [H-01] `AToken6909.totalSupply()` doesn’t return the correct answer if debtToken.
+
+https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/tokenization/ERC6909/ATokenERC6909.sol#L615-L625
+
+`AToken6909.totalSupply()` doesn’t deal with debt tokens.
+
+### Call sequence
+
+```bash
+balanceIntegrityMP(): failed!💥
+  Call sequence:
+		PropertiesMain.randDepositMP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,0,0,54)
+		PropertiesMain.userDebtIntegrityLP() Time delay: 1816 seconds Block delay: 4460
+		*wait* Time delay: 23219 seconds Block delay: 2679
+		PropertiesMain.randATokenNonRebasingBalanceOfLP((114, 172, 51, 9, 160, 6, 182, 24, 222, 190, 16, 10000000000000000000000001, false),71,40) Time delay: 4231 seconds Block delay: 3144
+		PropertiesMain.balanceIntegrityMP((17, 146, 190, 120, 135, 223, 0, 48, 56, 52, 6, 4, true)) Time delay: 15120 seconds Block delay: 4260
+		PropertiesMain.randForceFeedAssetLP((39, 9, 57, 86, 17, 46, 159, 200, 40, 150, 56, 90315082316502981852326478814776699183, true),21,5259549547762072723897631,28,76) Time delay: 7771 seconds Block delay: 2943
+		PropertiesMain.randFlashloanLP((95, 62, 0, 125, 251, 41, 12, 0, 142, 32, 177, 2304117920, false),48,24,33,16900206599294451704302747672692606325) Time delay: 12875 seconds Block delay: 584
+		PropertiesMain.userDebtIntegrityLP() Time delay: 46623 seconds Block delay: 30
+		PropertiesMain.indexIntegrityLP() Time delay: 21088 seconds Block delay: 2135
+		PropertiesMain.balanceIntegrityMP((241, 45, 35, 32, 29, 147, 168, 55, 3, 185, 224, 59189340112142212, true))
+		PropertiesMain.randATokenNonRebasingBalanceOfLP((121, 41, 101, 31, 153, 21, 19, 16, 6, 56, 32, 22466341988278164628090166485709297101, true),41,1) Time delay: 67545 seconds Block delay: 2919
+		PropertiesMain.userDebtIntegrityMP() Time delay: 73515 seconds Block delay: 1604
+		PropertiesMain.randFlashloanLP((127, 45, 57, 17, 79, 15, 77, 1, 139, 189, 3, 394305762056539185, false),127,50,84,29)
+		PropertiesMain.randDepositMP((21, 254, 163, 12, 8, 3, 34, 70, 161, 88, 50, 88, false),14,0,10,48,19421382673352919384155712) Time delay: 4019 seconds Block delay: 65
+		PropertiesMain.randATokenNonRebasingBalanceOfLP((96, 17, 158, 86, 61, 255, 189, 250, 253, 71, 1, 322287660160048350467018075945917531224, false),128,99)
+		PropertiesMain.randForceFeedAssetLP((251, 5, 188, 211, 164, 101, 223, 226, 40, 10, 112, 223, true),192,19,252,31)
+		PropertiesMain.indexIntegrityLP()
+		*wait* Time delay: 119228 seconds Block delay: 10660
+		PropertiesMain.randApproveDelegationMP((97, 2, 125, 34, 2, 102, 127, 44, 171, 95, 236, 134711128324446, true),6,28,62,387) Time delay: 21087 seconds Block delay: 4001
+		*wait* Time delay: 11098 seconds Block delay: 1905
+		PropertiesMain.randApproveDelegation((20, 90, 229, 231, 180, 190, 66, 31, 58, 91, 22, 36, true),0,100,39,62016477228795406052920921189716189683)
+		PropertiesMain.randATokenNonRebasingApproveLP((0, 103, 165, 95, 117, 46, 251, 10, 2, 12, 2, 226956450275534964030723271461528197586, true),45,52,119,135626380281893030703392882799574951)
+		PropertiesMain.randATokenNonRebasingApproveLP((0, 103, 165, 95, 117, 46, 251, 10, 2, 12, 2, 226956450275534964030723271461528197586, true),45,52,119,135626380281893030703392882799574951)
+		PropertiesMain.randApproveMP((91, 63, 2, 128, 72, 46, 209, 65, 139, 20, 74, 256979034224670827132272760797916563795, false),3,13,71,46,3)
+		*wait* Time delay: 12080 seconds Block delay: 4446
+		PropertiesMain.indexIntegrityLP() Time delay: 13023 seconds Block delay: 5214
+		PropertiesMain.randATokenNonRebasingBalanceOfLP((253, 208, 38, 186, 56, 7, 15, 21, 8, 60, 34, 71776119061217282, false),17,68)
+		PropertiesMain.randApproveMP((91, 63, 2, 128, 72, 46, 209, 65, 139, 20, 74, 256979034224670827132272760797916563795, false),16,13,158,46,3) Time delay: 84433 seconds Block delay: 2766
+		*wait* Time delay: 55616 seconds Block delay: 6996
+		PropertiesMain.randApproveLP((163, 41, 129, 3, 181, 156, 127, 137, 208, 230, 145, 2598705243670198172191181796048675544, true),6,6,176,95351219954448775)
+		PropertiesMain.randApproveDelegation((51, 84, 166, 35, 59, 99, 224, 36, 0, 76, 63, 49209298400337690172952012691919846669, false),83,4,54,515)
+		PropertiesMain.globalSolvencyCheckLP() Time delay: 12756 seconds Block delay: 280
+		PropertiesMain.randDepositLP((57, 171, 20, 10, 207, 61, 19, 17, 4, 116, 8, 272310406020363712675636653411240052972, true),37,83,42,335246270818705914106344475211929279666)
+		*wait* Time delay: 45606 seconds Block delay: 2912
+		PropertiesMain.randApproveMP((91, 63, 2, 128, 72, 46, 209, 65, 139, 20, 74, 256979034224670827132272760797916563795, false),16,13,158,46,3) Time delay: 54912 seconds Block delay: 6837
+		PropertiesMain.randDepositLP((7, 67, 5, 11, 205, 58, 37, 2, 32, 39, 38, 70165120714913858472350060505606445946, false),3,1,21,164240997741356245337360125951709546258)
+		PropertiesMain.userDebtIntegrityMP() Time delay: 85 seconds Block delay: 481
+		PropertiesMain.invariantRehypothecationLP()
+		PropertiesMain.randFlashloanLP((48, 60, 48, 80, 9, 95, 11, 170, 9, 84, 169, 41502176495236691007300792781773889376, true),41,27,128,1603821319247044276591776282)
+		PropertiesMain.balanceIntegrityLP((13, 242, 2, 0, 91, 186, 54, 35, 138, 163, 180, 206639321059554362247672425428891139305, false))
+		PropertiesMain.randRehypothecationRebalanceLP((0, 17, 0, 118, 1, 0, 1, 12, 29, 91, 3, 20864817560845552097478642746438031773, false),0) Time delay: 38020 seconds Block delay: 6765
+		PropertiesMain.randFlashloanLP((17, 191, 86, 20, 7, 34, 252, 89, 61, 249, 36, 1642114994522410653046501239, false),40,12,138,47) Time delay: 16 seconds Block delay: 6361
+		*wait* Time delay: 47389 seconds Block delay: 5321
+		PropertiesMain.randForceFeedAssetLP((78, 207, 202, 243, 13, 25, 164, 65, 207, 194, 154, 77, true),51,325285386916055477323298026619227925918,23,7)
+		PropertiesMain.randATokenNonRebasingApproveLP((0, 103, 72, 45, 117, 46, 48, 10, 0, 11, 1, 226956450275534964030723271461528197586, false),25,52,66,135626380281893030703392882799574951) Time delay: 18823 seconds Block delay: 2920
+		PropertiesMain.userDebtIntegrityMP()
+		*wait* Time delay: 48 seconds Block delay: 2971
+		*wait* Time delay: 74283 seconds Block delay: 4045
+		PropertiesMain.randRehypothecationRebalanceLP((159, 235, 3, 80, 54, 44, 48, 35, 97, 207, 57, 19248114041260044887223566979946979350, false),53)
+		PropertiesMain.randApproveLP((79, 23, 63, 21, 59, 39, 216, 253, 87, 159, 171, 308270167583459890974856608256301860560, false),7,152,60,14067918174704012184310043107244668168)
+		PropertiesMain.randApproveLP((231, 63, 155, 165, 132, 164, 249, 228, 11, 253, 5, 47, true),254,16,161,6674457113955165046993541602268650389)
+		PropertiesMain.randRehypothecationRebalanceLP((108, 19, 8, 6, 0, 9, 92, 32, 11, 79, 41, 10499, false),0)
+		*wait* Time delay: 162891 seconds Block delay: 27233
+		PropertiesMain.randApproveDelegation((81, 63, 161, 16, 22, 170, 207, 52, 254, 35, 161, 1774647075, true),33,53,32,7657265)
+		PropertiesMain.randDepositLP((60, 253, 65, 130, 108, 21, 105, 17, 220, 223, 104, 8501, false),129,4,53,138) Time delay: 29314 seconds Block delay: 2733
+		PropertiesMain.randApproveMP((121, 97, 38, 70, 17, 103, 249, 65, 79, 2, 47, 125371356139757617497740711158745669436, false),136,45,7,133,28)
+		PropertiesMain.randRehypothecationRebalanceLP((161, 85, 85, 247, 12, 155, 252, 253, 129, 158, 207, 119063618795431461433460725857218639230, false),132) Time delay: 9627 seconds Block delay: 4201
+		PropertiesMain.balanceIntegrityMP((11, 194, 97, 0, 53, 56, 20, 105, 194, 27, 20, 89920122055789005477494441605799120310, true))
+		PropertiesMain.randApproveDelegation((21, 4, 52, 223, 1, 1, 9, 163, 36, 147, 31, 19057048883188254032970195413263240685, true),0,39,20,0) Time delay: 4392 seconds Block delay: 7469
+		*wait* Time delay: 203494 seconds Block delay: 6047
+		PropertiesMain.userDebtIntegrityMP()
+		PropertiesMain.userDebtIntegrityLP()
+		*wait* Time delay: 30845 seconds Block delay: 4305
+		PropertiesMain.userDebtIntegrityMP() Time delay: 78 seconds Block delay: 2948
+		PropertiesMain.balanceIntegrityMP((77, 8, 32, 33, 4, 24, 10, 6, 145, 29, 0, 8, false))
+		*wait* Time delay: 86037 seconds Block delay: 7373
+		PropertiesMain.randATokenNonRebasingApproveLP((0, 103, 165, 95, 117, 46, 251, 10, 2, 12, 2, 226956450275534964030723271461528197586, true),45,52,119,135626380281893030703392882799574951) Time delay: 16667 seconds Block delay: 399
+		PropertiesMain.randDepositMP((46, 224, 184, 84, 5, 127, 178, 45, 253, 254, 5, 223, false),155,140,39,68,33540519)
+		PropertiesMain.globalSolvencyCheckLP() Time delay: 49950 seconds Block delay: 2948
+		PropertiesMain.randATokenNonRebasingApproveLP((77, 97, 13, 49, 253, 35, 21, 99, 68, 83, 95, 264051319282080588839665346335299883638, true),6,54,200,438)
+		PropertiesMain.randForceFeedAssetLP((121, 196, 95, 129, 47, 47, 84, 133, 53, 68, 93, 280120523410443300947125982062561820713, false),74,29728474566561634681050291829427031602,55,83)
+		PropertiesMain.globalSolvencyCheckLP()
+		PropertiesMain.randDepositMP((50, 236, 34, 13, 177, 63, 33, 231, 142, 160, 247, 100000000, false),161,0,213,69,45999999999999999999)
+		PropertiesMain.randApproveLP((66, 33, 10, 92, 113, 65, 76, 133, 144, 93, 48, 317845813036906358587149005579670952961, false),252,50,24,47) Time delay: 47694 seconds Block delay: 4342
+		*wait* Time delay: 61634 seconds Block delay: 7197
+		PropertiesMain.indexIntegrityLP()
+		PropertiesMain.randATokenNonRebasingBalanceOfLP((223, 73, 219, 50, 1, 17, 1, 3, 6, 24, 1, 146, false),2,10)
+		PropertiesMain.randATokenNonRebasingApproveLP((8, 76, 86, 118, 94, 253, 46, 14, 92, 15, 77, 152749842575310241033811880904420039620, false),76,75,90,233690612543116798478321318801816488022)
+		PropertiesMain.globalSolvencyCheckMP()
+		PropertiesMain.randApproveLP((8, 254, 13, 166, 164, 47, 21, 136, 7, 89, 252, 258158516, true),237,253,14,248963623858202539841181550809123312011) Time delay: 10501 seconds Block delay: 223
+		PropertiesMain.randSetUseReserveAsCollateralMP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 21846270404136121375367471326134, false),0,0,1,true)
+		PropertiesMain.globalSolvencyCheckMP() Time delay: 1426 seconds Block delay: 4387
+		PropertiesMain.userDebtIntegrityLP() Time delay: 23959 seconds Block delay: 5637
+		*wait* Time delay: 80900 seconds Block delay: 12739
+		PropertiesMain.userDebtIntegrityMP() Time delay: 32745 seconds Block delay: 1846
+		PropertiesMain.randATokenNonRebasingBalanceOfLP((241, 233, 254, 7, 41, 18, 4, 92, 164, 46, 4, 340282366920938463463374607431768211452, true),240,76)
+		PropertiesMain.randApproveMP((91, 63, 2, 128, 72, 46, 209, 65, 139, 20, 74, 256979034224670827132272760797916563795, false),16,13,158,46,3)
+		*wait* Time delay: 31346 seconds Block delay: 7468
+		PropertiesMain.randATokenNonRebasingApproveLP((252, 162, 63, 36, 161, 40, 76, 198, 110, 212, 93, 0, false),170,72,5,96)
+		*wait* Time delay: 23845 seconds Block delay: 6913
+		PropertiesMain.randApproveDelegation((209, 254, 76, 87, 252, 80, 153, 21, 192, 18, 170, 18, false),10,236,7,502) Time delay: 6540 seconds Block delay: 823
+		*wait* Time delay: 137297 seconds Block delay: 3539
+		*wait* Time delay: 64670 seconds Block delay: 781
+		PropertiesMain.randApproveDelegation((20, 92, 31, 53, 56, 37, 187, 16, 165, 10, 148, 5, false),152,208,182,297851094169863725863099547286273221214)
+		PropertiesMain.userDebtIntegrityLP() Time delay: 68550 seconds Block delay: 5000
+		PropertiesMain.randApproveDelegation((13, 161, 3, 34, 44, 85, 1, 64, 229, 21, 9, 8000, false),231,20,69,15341755156449769856804115662473504135)
+		PropertiesMain.randBorrowMP((246, 132, 94, 225, 62, 252, 136, 230, 6, 252, 32, 68143482658907150828985204057408700619, false),143,13,121,227,4271441051)
+		PropertiesMain.randForceFeedAssetLP((0, 45, 26, 60, 209, 14, 0, 227, 51, 3, 9, 7536396225533125978320862816564854994, false),4,409898644694188117,23,17)
+		PropertiesMain.invariantRehypothecationLP()
+		PropertiesMain.randATokenNonRebasingBalanceOfLP((83, 9, 81, 5, 9, 25, 62, 15, 9, 253, 254, 2645899438, false),197,79) Time delay: 38019 seconds Block delay: 1188
+		*wait* Time delay: 16424 seconds Block delay: 5721
+		PropertiesMain.invariantRehypothecationLP() Time delay: 80854 seconds Block delay: 626
+		PropertiesMain.randApproveMP((21, 7, 8, 31, 0, 146, 83, 45, 28, 16, 107, 12451555928943197719004538849424073320, false),46,4,21,6,2780398) Time delay: 26148 seconds Block delay: 1302
+		PropertiesMain.randATokenNonRebasingApproveLP((22, 4, 86, 156, 254, 136, 33, 254, 246, 251, 203, 783, false),186,41,12,190991791500111448104628957160997581800)
+		PropertiesMain.randApproveMP((91, 63, 2, 128, 48, 29, 141, 65, 39, 20, 74, 256216505162522495745240811746225775452, false),16,13,158,12,3)
+		PropertiesMain.globalSolvencyCheckMP()
+		PropertiesMain.randDepositMP((186, 238, 24, 0, 110, 32, 93, 57, 98, 153, 1, 114725417418437506094518906338289732900, false),45,215,54,64,174089072978735802844628289708287376405)
+		PropertiesMain.globalSolvencyCheckMP()
+		PropertiesMain.randIncreaseAllowanceLP((56, 8, 240, 79, 206, 234, 65, 78, 59, 52, 251, 33540519, false),7,2,48,486173696) Time delay: 25807 seconds Block delay: 8570
+		PropertiesMain.invariantRehypothecationLP()
+		PropertiesMain.randDepositLP((8, 19, 101, 6, 75, 98, 163, 250, 91, 56, 180, 161952454400808545378709638062577234787, true),5,0,180,7793134881763513378910859569231073661) Time delay: 31345 seconds Block delay: 4808
+		*wait* Time delay: 35918 seconds Block delay: 7639
+		PropertiesMain.indexIntegrityLP()
+		*wait* Time delay: 188294 seconds Block delay: 3585
+		PropertiesMain.randRehypothecationRebalanceLP((205, 223, 37, 129, 56, 27, 249, 127, 150, 32, 148, 17953301117148000830340163059405626430, true),37)
+		PropertiesMain.randApproveMP((137, 63, 2, 44, 72, 42, 83, 65, 139, 20, 74, 2343578901693268073061588024783243975, false),9,5,145,14,1) Time delay: 56794 seconds Block delay: 2674
+		PropertiesMain.randApproveMP((4, 163, 22, 183, 160, 169, 73, 65, 7, 214, 38, 768, false),22,48,0,111,8430491816858470818296292133077) Time delay: 69943 seconds Block delay: 6
+		PropertiesMain.randATokenNonRebasingApproveLP((246, 119, 79, 6, 254, 173, 33, 1, 64, 184, 63, 65537, true),0,85,254,115394360585112399355623263525863097536) Time delay: 16932 seconds Block delay: 1356
+		PropertiesMain.randBorrowMP((76, 234, 88, 45, 251, 125, 101, 216, 184, 142, 113, 119355999275623381047735303950295409700, false),233,99,122,48,143419544360486615777317803228498707019) Time delay: 34044 seconds Block delay: 330
+		PropertiesMain.randATokenNonRebasingApproveLP((0, 144, 165, 95, 117, 46, 222, 6, 0, 2, 0, 82946763120908150161080064359268056641, false),3,31,43,57616749178430575125722099407105770)
+		*wait* Time delay: 53014 seconds Block delay: 3457
+		PropertiesMain.globalSolvencyCheckLP()
+		PropertiesMain.globalSolvencyCheckMP()
+		*wait* Time delay: 5820 seconds Block delay: 8440
+		PropertiesMain.randApproveDelegation((1, 31, 213, 154, 95, 159, 63, 252, 252, 74, 95, 91355125619628245492144631893382348001, true),46,58,84,4722366482869645213694)
+		PropertiesMain.randApproveDelegationMP((200, 224, 61, 145, 96, 229, 165, 49, 122, 7, 91, 99999, false),53,222,20,4)
+		PropertiesMain.randApproveMP((91, 5, 159, 151, 51, 197, 67, 253, 197, 65, 18, 299506130026320175094095966999974555543, true),1,182,27,31,70000000000000000000000000) Time delay: 58040 seconds Block delay: 1360
+		PropertiesMain.balanceIntegrityMP((7, 254, 62, 53, 127, 216, 236, 191, 52, 30, 76, 20, true)) Time delay: 21372 seconds Block delay: 1110
+
+		emit AssertFail(«617»)
+```
+
+### Recommendation
+
+from:
+
+```bash
+  function totalSupply(uint256 id) public view override returns (uint256) {
+      uint256 currentSupplyScaled = super.totalSupply(id);
+
+      if (currentSupplyScaled == 0) {
+          return 0;
+      }
+
+      return currentSupplyScaled.rayMul(
+          POOL.getReserveNormalizedIncome(_underlyingAssetAddresses[id])
+      );
+  }
+```
+
+To:
+
+```bash
+  function totalSupply(uint256 id) public view override returns (uint256) {
+      uint256 currentSupplyScaled = super.totalSupply(id);
+
+      if (currentSupplyScaled == 0) {
+          return 0;
+      }
+
+      if (isDebtToken(id)) {
+          return currentSupplyScaled.rayMul(
+              POOL.getReserveNormalizedVariableDebt(_underlyingAssetAddresses[id])
+          );
+      } else {
+          return currentSupplyScaled.rayMul(
+              POOL.getReserveNormalizedIncome(_underlyingAssetAddresses[id])
+          );
+      }
+  }
+```
+
+Fix :: https://github.com/Cod3x-Labs/Cod3x-Lend/commit/f8cd1275b4764da728e040ed9dcfb0bcf314b332
+
+# [H-02] Rebalance rehypothecation DOS
+
+https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/tokenization/ERC20/AToken.sol#L383-L389
+
+During a flash loan operation, the `AToken` contract sends the underlying assets to the user via the `transferUnderlyingTo` function, which removes tokens from the vault.
+
+After the user's logic executes, the underlying tokens return to the `AToken` contract, but without triggering the rebalance mechanism. This can potentially create a vulnerability where the vault remains empty, resulting in a DOS condition affecting vault rehypothecation.
+
+```solidity
+function handleRepayment(address user, address onBehalfOf, uint256 amount)
+    external
+    override
+    onlyLendingPool {
+    _underlyingAmount = _underlyingAmount + amount
+}
+```
+
+### Call sequence
+
+```bash
+invariantRehypothecation(): failed!💥
+  Call sequence:
+    PropertiesMain.randFlashloan((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,0,0)
+    PropertiesMain.invariantRehypothecation()
+```
+
+### Recommendation
+
+`_rebalance(0)` must be added to `handleRepayment()` and the rehypothecation logic must be non-blocking to avoid any DOS associated with the rehypothecation vault.
+
+Fix ::: https://github.com/Cod3x-Labs/Cod3x-Lend/commit/c5b28c181ffee86d85480a49b1d88251ab7eaf92/contracts/protocol/tokenization/ERC20/AToken.sol#diff-87e27a6bc579861af841bca6e0a97d87a90079147b7ca9596be0be0e041340dc
+
+# [M-01] Rounding issue in `ValidationLogic.validateWithdraw()`
+
+https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/core/lendingpool/logic/GenericLogic.sol#L133-L140
+
+https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/core/minipool/logic/MiniPoolGenericLogic.sol#L117-L124
+
+Properties `230` and `505` failed because the way the health factor is calculated in `ValidationLogic.validateWithdraw()` is different from the actual health factor at the end of the withdrawal transaction.
+
+The health factor is greater than `1e18` [here](https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/core/lendingpool/logic/GenericLogic.sol#L121), but ends up being less once the transaction is complete.
+
+### Call sequence
+
+224 - ❌ `withdraw()` must not result in a health factor of less than 1.
+
+```bash
+randWithdrawMP((uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint128,bool),uint8,uint8,uint8,uint8,uint128): failed!💥
+  Call sequence:
+    PropertiesMain.randDepositMP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 55231321179, false),0,0,2,0,1)
+    PropertiesMain.randBorrowMP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,2,1,0)
+    PropertiesMain.randWithdrawMP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 232958064952391890769, false),0,2,2,0,1)
+
+emit AssertFail(«224»)
+```
+
+505 - ❌ `withdraw()` must not result in a health factor of less than 1.
+
+```bash
+  randWithdrawMP((uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint128,bool),uint8,uint8,uint8,uint8,uint128): failed!💥
+  Call sequence:
+    PropertiesMain.randDepositMP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 55231321179, false),0,0,2,0,1)
+    PropertiesMain.randBorrowMP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,2,1,0)
+    PropertiesMain.randWithdrawMP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 232958064952391890769, false),0,2,2,0,1)
+
+    emit AssertFail(«505»)
+```
+
+### Recommendation
+
+From:
+
+```solidity
+  function getAmountToDecreaseInEth(
+      address oracle,
+      address asset,
+      uint256 amount,
+      uint256 decimals
+  ) internal view returns (uint256) {
+      return IOracle(oracle).getAssetPrice(asset) * amount / (10 ** decimals);
+  }
+```
+
+To:
+
+```solidity
+  function getAmountToDecreaseInEth(
+      address oracle,
+      address asset,
+      uint256 amount,
+      uint256 decimals
+  ) internal view returns (uint256) {
+      return WadRayMath.divUp(IOracle(oracle).getAssetPrice(asset) * amount,10 ** decimals);
+  }
+```
+
+In both `GenericLogic` and `MinipoolGenericLogic`.
+
+Fix ::: https://github.com/Cod3x-Labs/Cod3x-Lend/commit/c72d768bd55fa969fad1d25af3930e1b7d87ae9e
+
+# [M-02] Rounding issue in `ValidationLogic.validateBorrow()`
+
+https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/core/lendingpool/logic/ValidationLogic.sol#L210
+
+https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/core/minipool/logic/MiniPoolValidationLogic.sol#L212
+
+Properties `207` and `508` failed because the way the health factor is calculated in `ValidationLogic.validateWithdraw()` is different from the actual health factor at the end of the withdrawal transaction.
+
+The health factor is greater than `1e18` [here](https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/core/lendingpool/logic/GenericLogic.sol#L121), but ends up being less once the transaction is complete.
+
+### Call sequence
+
+207 - ❌ `borrow()` must not result in a health factor of less than 1.
+
+```bash
+randBorrowLP((uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint8,uint128,bool),uint8,uint8,uint8,uint128): failed!💥
+  Call sequence:
+    PropertiesMain.randApproveDelegation((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,0,0)
+    PropertiesMain.randApproveDelegation((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,0,0)
+    PropertiesMain.randATokenNonRebasingBalanceOfLP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0)
+    PropertiesMain.randDepositLP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15989, false),0,0,1,50)
+    PropertiesMain.randFlashloanLP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,0,0)
+    PropertiesMain.randApproveMP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,0,0,0)
+    PropertiesMain.randForceFeedAssetLP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,0,0)
+    PropertiesMain.randATokenNonRebasingBalanceOfLP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0)
+    PropertiesMain.randATokenNonRebasingBalanceOfLP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0)
+    PropertiesMain.randApproveDelegation((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,0,0)
+    PropertiesMain.randFlashloanLP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,0,0)
+    PropertiesMain.randBorrowLP((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false),0,0,0,3)
+
+emit AssertFail(«207»)
+```
+
+### Recommendation
+
+From:
+
+```solidity
+  require(
+      vars.amountOfCollateralNeededETH <= vars.userCollateralBalanceETH,
+      Errors.VL_COLLATERAL_CANNOT_COVER_NEW_BORROW
+  );
+```
+
+To:
+
+```solidity
+  require(
+      vars.amountOfCollateralNeededETH < vars.userCollateralBalanceETH,
+      Errors.VL_COLLATERAL_CANNOT_COVER_NEW_BORROW
+  );
+```
+
+In both `ValidationLogic` and `MinipoolValidationLogic`.
+
+Fix ::: https://github.com/Cod3x-Labs/Cod3x-Lend/commit/72a1dfc703d81acb093744c04003b3b21174b341
+
+# [M-03] `userConfig` inconsistency
+
+https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/core/lendingpool/logic/LiquidationLogic.sol#L255
+
+https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/core/minipool/logic/MiniPoolLiquidationLogic.sol#L244
+
+`userConfig.isUsingAsCollateral()` returns `false` even if the user has collateral.
+
+Condition:
+
+- Call `liquidationCall()` with the `Liquidator` and the `User` liquidated are the same
+- `receiveAToken == true`
+- `vars.maxCollateralToLiquidate == vars.userCollateralBalance`
+
+These condition will [write false in the userConfig](https://github.com/Cod3x-Labs/Cod3x-Lend/blob/bb2a3c08df5ac7a95ceb20cdccd66c5f007e38d9/contracts/protocol/core/minipool/logic/MiniPoolLiquidationLogic.sol#L245) for the given collateral address. But because the `Liquidator` and the `User` are the same, the user will end up with aTokens but `userConfig.isUsingAsCollateral()` will return `false`.
+
+### Call sequence
+
+521 - ❌ `UserConfigurationMap` integrity: If a user has a given aToken then `isUsingAsCollateralOrBorrowing` and `isUsingAsCollateral` should return true.
+
+```diff
+userConfigurationMapIntegrityLiquidityMP(): failed!💥
+  Call sequence:
+    PropertiesMain.randForceFeedAssetLP((5, 152, 128, 48, 100, 9, 2, 40, 34, 8, 34, 1501, false),121,54226010652114989114253842279358793987,181,52)
+    PropertiesMain.randRehypothecationRebalanceLP((0, 97, 131, 3, 114, 9, 18, 69, 14, 12, 0, 644146345200320509442638598, false),0)
+    PropertiesMain.balanceIntegrityMP((3, 147, 16, 52, 40, 1, 41, 224, 2, 0, 6, 944986130179235443279470948070735946, false))
+    PropertiesMain.randRehypothecationRebalanceLP((7, 16, 3, 19, 3, 93, 0, 0, 21, 0, 1, 82787515665385814594281779132579905529, false),0)
+    PropertiesMain.balanceIntegrityMP((7, 21, 4, 4, 3, 44, 2, 98, 26, 24, 1, 299366688053652699667520806443059933630, false))
+    PropertiesMain.randForceFeedAssetLP((8, 41, 53, 10, 4, 146, 2, 52, 4, 63, 4, 230412744270376668990711099159295150754, true),1,45,32,4)
+    PropertiesMain.randATokenNonRebasingBalanceOfLP((50, 33, 62, 30, 11, 69, 0, 85, 12, 1, 0, 70968246707850283104759241505554082838, false),2,12)
+    PropertiesMain.randATokenNonRebasingBalanceOfLP((13, 214, 12, 0, 55, 97, 6, 11, 3, 24, 2, 223114662533879335170019189445425289063, false),0,1)
+    PropertiesMain.randRehypothecationRebalanceLP((0, 5, 2, 0, 0, 19, 1, 17, 15, 0, 1, 15399013415214194558366896861180835833, false),0)
+    PropertiesMain.randApproveDelegationMP((7, 7, 136, 7, 2, 27, 37, 16, 188, 164, 155, 125457204010425726085156370230551658399, false),18,0,26,116928022673724857876876092269162325547)
+    PropertiesMain.randApproveMP((141, 53, 6, 15, 3, 46, 2, 0, 26, 3, 32, 93, false),0,9,0,24,7)
+    PropertiesMain.randForceFeedAssetLP((1, 4, 20, 1, 0, 0, 1, 4, 1, 0, 0, 77999725134659503690874698400990357, false),0,43444486718927927519277947390413037,0,0)
+    PropertiesMain.randIncreaseAllowanceLP((27, 225, 28, 58, 0, 9, 144, 45, 6, 64, 99, 2000, false),13,1,0,26)
+    PropertiesMain.randApproveDelegation((55, 42, 157, 84, 156, 23, 20, 28, 232, 57, 92, 53138198135018813486024556, false),7,23,136,12920168845449032428228214843801832846)
+    PropertiesMain.randFlashloanLP((19, 173, 19, 24, 13, 2, 4, 30, 42, 222, 89, 56298442179623642784898957328763779769, false),23,23,3,24)
+    PropertiesMain.randFlashloanLP((10, 224, 85, 153, 63, 89, 17, 211, 53, 8, 5, 227946792577719080308576085489028001948, false),0,8,153,56998291403192289944759203850370384144)
+    PropertiesMain.randATokenNonRebasingBalanceOfLP((116, 6, 251, 2, 201, 75, 0, 0, 25, 0, 2, 893778136417665197399, false),0,0)
+    PropertiesMain.randDepositLP((37, 0, 85, 159, 18, 21, 18, 46, 0, 25, 14, 19517060225048056303761628647016002362, false),2,14,1,34611341961874600762689036068982424608)
+    PropertiesMain.randATokenNonRebasingApproveLP((86, 4, 52, 0, 4, 3, 0, 51, 57, 77, 11, 4214045822038363900405617055608070392, false),17,0,0,48)
+    PropertiesMain.randIncreaseAllowanceLP((210, 37, 48, 104, 29, 114, 1, 45, 215, 54, 86, 7658409028368692304470642503984682750, false),1,100,1,68147694)
+    PropertiesMain.randIncreaseAllowanceLP((17, 14, 70, 115, 34, 241, 57, 58, 145, 205, 239, 384000, false),0,9,86,3)
+    PropertiesMain.randATokenNonRebasingBalanceOfLP((2, 2, 131, 2, 41, 57, 0, 6, 3, 4, 14, 2054715664365430604936, false),0,0)
+    PropertiesMain.balanceIntegrityLP((5, 5, 23, 4, 26, 0, 0, 49, 0, 117, 131, 92800218047652643161337046704555957618, false))
+    PropertiesMain.randATokenNonRebasingApproveLP((1, 29, 0, 16, 129, 4, 237, 62, 117, 25, 59, 63759371, false),2,91,120,70849838396173411549935219204787951268)
+    PropertiesMain.randDepositMP((161, 48, 156, 7, 3, 44, 38, 18, 78, 178, 31, 65536, true),0,8,5,85,279416945937829085844524909615217678489)
+    PropertiesMain.randApproveMP((103, 75, 80, 15, 6, 99, 34, 92, 0, 168, 2, 6466, false),5,1,0,12,21687892296102167871494859254594166084)
+    PropertiesMain.randIncreaseAllowanceLP((3, 0, 14, 4, 1, 10, 204, 0, 87, 2, 22, 1057948505, false),0,0,1,19321481573813620208781161274580024427)
+    PropertiesMain.randApproveDelegation((81, 15, 53, 249, 97, 8, 1, 0, 174, 48, 8, 25477095744354333394982906044784527355, false),35,0,23,4890429122498235428730497281448342782)
+    PropertiesMain.randApproveDelegation((0, 8, 254, 1, 3, 18, 6, 7, 54, 20, 54, 223247792321284384209060722630322754834, false),1,16,6,69824)
+    PropertiesMain.randRehypothecationRebalanceLP((5, 21, 82, 22, 9, 111, 53, 1, 0, 0, 1, 38348043, false),0)
+    PropertiesMain.balanceIntegrityMP((0, 1, 5, 3, 5, 59, 0, 0, 0, 2, 17, 9200815030011147542581486443645422190, false))
+    PropertiesMain.randBorrowMP((18, 174, 57, 15, 31, 27, 52, 148, 179, 112, 0, 3858086692, false),4,1,49,226,218343749412336002673253792777943950664)
+    PropertiesMain.randATokenNonRebasingBalanceOfLP((0, 1, 153, 0, 11, 4, 2, 26, 3, 0, 0, 2833135388202602584488, false),4,6)
+    PropertiesMain.randApproveDelegationMP((4, 252, 163, 41, 248, 1, 243, 5, 43, 18, 27, 123825494993740765743949008853328702387, false),12,0,123,79849183813832707959620360019012871334)
+    PropertiesMain.randDepositMP((135, 225, 46, 84, 33, 65, 217, 70, 75, 121, 88, 340282366920938463463374607431768211452, true),43,7,85,119,74188707498321978376143096653022900581)
+    PropertiesMain.randDepositLP((0, 179, 164, 0, 0, 0, 67, 10, 20, 61, 6, 1113008004916695407708725639032599526, false),36,0,45,10269227544491121539976123734763899108)
+    PropertiesMain.randApproveLP((4, 0, 190, 5, 21, 35, 91, 0, 3, 10, 0, 36900918930485025500279233946831879092, false),3,5,8,4800457795126598917393473376752668025)
+    PropertiesMain.randDepositMP((89, 68, 2, 0, 27, 159, 94, 21, 177, 19, 7, 140371643045405529648011490355138263791, true),0,0,4,0,62137712602760143599745061713599751554)
+    PropertiesMain.userConfigurationMapIntegrityLiquidityMP()
+
+  emit AssertFail(«521»)
+```
+
+### Recommendation
+
+From:
+
+```
+ if (vars.maxCollateralToLiquidate == vars.userCollateralBalance) {
+        userConfig.setUsingAsCollateral(collateralReserve.id, false);
+        emit ReserveUsedAsCollateralDisabled(params.collateralAsset, params.user);
+ }
+```
+
+To:
+
+```solidity
+ if (vars.collateralAtoken.balanceOf(params.user) == 0) {
+        userConfig.setUsingAsCollateral(collateralReserve.id, false);
+        emit ReserveUsedAsCollateralDisabled(params.collateralAsset, params.user);
+ }
+```
+
+In both `LiquidationLogic` and `MiniPoolLiquidationLogic`.
+
+Fix ::: https://github.com/Cod3x-Labs/Cod3x-Lend/commit/ea09026fe0f770e1cbc90f6ef0d12d069c55e7df
