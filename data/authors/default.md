@@ -11,7 +11,7 @@ github: https://github.com/beirao
 
 Hi, I'm Beirao.
 
-I am a Senior Security Researcher at [Certora](https://www.certora.com/), specializing in EVM and SVM smart contract auditing and formal verification. I've led audits on top-tier protocols including EigenLayer, Euler, AAVE, Morpho, and Compound.
+I'm a Senior Security Researcher at [Certora](https://www.certora.com/), focusing on EVM and SVM smart contract audits. I've audited leading protocols such as EigenLayer, Euler, Morpho, and Compound.
 
 I'm also CSO at [Astera](https://astera.fi/), where I oversee security and develop innovative DeFi protocols:
 
