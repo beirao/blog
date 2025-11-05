@@ -11,14 +11,14 @@ github: https://github.com/beirao
 
 Hi, I'm Beirao.
 
-I am a former independent security researcher, where I specialized in [private audits](/tags/reports), [security contests](https://code4rena.com/@0xBeirao), and bug bounties. Now, I lead security initiatives as Head of Security at [Conclave](https://conclave.io/).
+I am a Senior Security Researcher at [Certora](https://www.certora.com/), specializing in EVM and SVM smart contract auditing and formal verification. I've led audits on top-tier protocols including EigenLayer, Euler, AAVE, Morpho, and Compound.
 
-At Conclave, I oversee the development of the innovative **Cod3x DeFi stack**, ensuring our platform meets the industry's highest security standards.
+I'm also CSO at [Astera](https://astera.fi/), where I oversee security and develop innovative DeFi protocols:
 
-My key development contributions include:
+- **Astera Lending** – A credit market combining the best of Morpho and AAVE
+- **Astera USD** – A governance-free, fully automated stablecoin with advanced DeFi integrations
+- **Balancer V3 TWAP Oracle** – Built on Balancer V3 hooks
 
-- [**Reliquary V2**](https://github.com/Cod3x-Labs/Reliquary)
-- [**Cod3x Lend**](https://github.com/Cod3x-Labs/Cod3x-Lend)
-- [**Cod3x USD**](https://github.com/Cod3x-Labs/Cod3x-USD)
+I've conducted 11+ private security reviews, participated in security contests, and bug bounties. My expertise includes fuzzing, invariant testing, and formal verification.
 
-Every day, I'm committed to learning and innovating to make WEB3 a safer place.
+Committed to making Web3 a safer place every day.
