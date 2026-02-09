@@ -19,7 +19,7 @@ export default function ToolsLayout() {
             <article className="space-y-2 xl:grid xl:grid-cols-4 xl:items-baseline xl:space-y-0">
               <div className="space-y-3 xl:col-span-3">
                 <Link
-                  href="http://www.zeus-audit.com/"
+                  href="https://zeus-audit.com/"
                   target="_blank"
                   rel="noreferrer"
                   className="text-gray-900 dark:text-gray-100"

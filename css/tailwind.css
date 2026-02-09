@@ -23,3 +23,17 @@ input:-webkit-autofill,
 input:-webkit-autofill:focus {
   transition: background-color 600000s 0s, color 600000s 0s;
 }
+
+@keyframes banner-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.animate-banner-shimmer {
+  animation: banner-shimmer 12s linear infinite;
+  opacity: 0.8;
+}

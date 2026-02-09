@@ -25,6 +25,31 @@ const LayoutWrapper = ({ children }) => {
   return (
     <SectionContainer>
       <div className="flex h-screen flex-col justify-between" onClick={conditionnalToggle}>
+        <div className="relative left-1/2 mb-4 w-screen -translate-x-1/2 transform">
+          <Link
+            href="https://zeus-audit.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="relative block overflow-hidden border border-blue-200 bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700 text-white shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-2 focus:ring-offset-white dark:border-blue-500/40 dark:focus:ring-offset-gray-900"
+          >
+            <span
+              aria-hidden
+              className="animate-banner-shimmer absolute inset-0 bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.35),transparent)] bg-[length:200%_100%]"
+            />
+            <div className="relative flex items-center px-4 py-1 text-sm font-semibold md:text-sm">
+              <div className="flex flex-1 items-center justify-center gap-2 text-center">
+                <span role="img" aria-hidden>
+                  ⚡️
+                </span>
+                <span>New: Zeus Audit is live — AI auditing SaaS.</span>
+              </div>
+              <span className="ml-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wide">
+                Explore
+                <span aria-hidden>↗</span>
+              </span>
+            </div>
+          </Link>
+        </div>
         <header className="flex  flex-wrap items-center justify-between py-10">
           <div>
             <div className="flex items-center justify-between">
